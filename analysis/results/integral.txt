@@ -1,0 +1,30 @@
+$ python3 analysis/run.py integral
+=== C AES-NI Lambda-Set Integral (Zero-Sum) Balance Audit ===
+--- Order 1 (256 texts, active diagonal bytes in ADRS / M1) ---
+Round  SLHF128 (bal/16)  SLHF256 (bal/32)  SLHFTEM256 (bal/32)
+-----  ----------------  ----------------  -------------------
+r= 1        16 / 16           32 / 32              32 / 32
+r= 2        16 / 16           32 / 32              32 / 32
+r= 3        16 / 16           32 / 32              16 / 32
+r= 4        16 / 16           32 / 32               0 / 32
+r= 5         8 / 16           12 / 32               0 / 32
+r= 6         0 / 16            0 / 32               0 / 32
+r= 8         0 / 16            0 / 32               0 / 32
+r=10         0 / 16            0 / 32               0 / 32
+r=15         0 / 16            0 / 32                  -
+--- Order 2 (65536 texts, active diagonal bytes in ADRS / M1) ---
+Round  SLHF128 (bal/16)  SLHF256 (bal/32)  SLHFTEM256 (bal/32)
+-----  ----------------  ----------------  -------------------
+r= 1        16 / 16           32 / 32              32 / 32
+r= 2        16 / 16           32 / 32              32 / 32
+r= 3        16 / 16           32 / 32              16 / 32
+r= 4        16 / 16           32 / 32               0 / 32
+r= 5         8 / 16           16 / 32               0 / 32
+r= 6         0 / 16            0 / 32               0 / 32
+r= 8         0 / 16            0 / 32               0 / 32
+r=10         0 / 16            0 / 32               0 / 32
+r=15         0 / 16            0 / 32                  -
+
+=== C PCLMULQDQ QuickSilver GF(2^128) MAC & VOLE Gate Audit ===
+PolyMAC order-1 Lambda-set balanced bytes:     16 / 16 (128 / 128 bits)
+Hardware PCLMULQDQ VOLE AND-gate identities:   1000000 / 1000000 PASS

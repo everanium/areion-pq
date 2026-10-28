@@ -1,0 +1,26 @@
+$ python3 analysis/run.py rank
+=== Areion-256 Free-Round Witness Rank Audit (10 rounds, 320 S-boxes) ===
+Total S-boxes across 10 rounds:               320 (2560 input bits, 2560 output bits)
+Committed witness bytes (rounds 0..8):        288 B (2304 bits)
+Round 9 free S-boxes (uncommitted):           32 B (256 bits, 0 witness DOF)
+Jacobian rank d(Y^(0..8)) / d(w[0..287]):     2304 / 2304
+Jacobian rank d(X^(0,1), Y^(0..9)) / d(K1,w): 2560 / 2560
+Round 9 input rank d(X^(9,1..2)) / d(w8,CK2): 256 / 256
+Round 9 output rank d(Y^(9,1..2)) / d(w8,CK2):256 / 256
+Concrete trace cross-check (200 random runs): 0 mismatches
+
+=== Areion-512 Free-Round Witness Rank Audit (15 rounds, 720 S-boxes) ===
+Total S-boxes across 15 rounds:               720 (5760 input bits, 5760 output bits)
+Committed witness bytes (rounds 0..13):       672 B (5376 bits)
+Round 14 free S-boxes (uncommitted):          48 B (384 bits, 0 witness DOF)
+Round 14 passive-branch linear equations:     16 B (128 bits, b'_14 = b_14 ^ MC(a'_14))
+Jacobian rank d(Y^(0..13)) / d(w[0..671]):    5376 / 5376
+Round 14 output+linear rank w.r.t. C^K2:      512 / 512
+Concrete trace cross-check (100 random runs): 0 mismatches
+
+=== Areion-EM2-256 Dual Free-Round Witness Audit (20 rounds, 640 S-boxes) ===
+Total S-boxes across P1 (10r) + P2 (10r):     640 (5120 input bits, 5120 output bits)
+Committed witness bytes (2 x 288 B):          576 B (4608 bits)
+Uncommitted free S-boxes (Round 9 P1 + P2):   64 B (512 bits, 0 extra witness DOF)
+Combined witness Jacobian rank d(Y)/d(w):     4608 / 4608
+Full key+witness Jacobian rank d(X,Y)/d(K,w): 4864 / 4864

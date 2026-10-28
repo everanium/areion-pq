@@ -1,0 +1,16 @@
+$ python3 analysis/run.py sbox_qs
+=== QuickSilver GF(2^8) Degree-2 S-Box Completeness & Soundness Audit ===
+Bit-level unary gates (Sq, Affine, AffineInv): 256 / 256 exact
+Bit-level bilinear multiplication (Mul_GF256): 65536 / 65536 exact
+Total (X, S) byte pairs evaluated:             65536 (256 valid + 65280 invalid)
+Valid S-box pairs passing (C1 == 0 & C2 == 0): 256 / 256 (100% completeness)
+Zero-input fixed point (X=0x00, S=0x63->Y=0):  PASS
+Invalid pairs passing (C1 == 0 & C2 == 0):     0 / 65280 (100% soundness)
+Invalid pairs rejected by (C1, C2) system:     65280 / 65280
+--- Single-Equation Spurious Solution Analysis ---
+Naive X*Y ^ 1 == 0 completeness on valid pairs:255 / 256 (fails on X=0x00, S=0x63)
+C1 alone (Sq(X)*Y ^ X == 0) false accepts:     255 / 65280 (all 255 at X=0x00, S!=0x63)
+C2 alone (Sq(Y)*X ^ Y == 0) false accepts:     255 / 65280 (1 spurious S=0x63 per X!=0: 255 pairs)
+--- QuickSilver GF(2^128) VOLE Homomorphic Gate Identity ---
+Valid pairs satisfying B_V == A0 ^ A1*Delta:   256 / 256
+Random invalid pairs rejected (err = C*Delta^2):1000 / 1000

@@ -1,0 +1,22 @@
+$ python3 analysis/run.py ortho
+=== Orthomorphism Bijectivity & GF(2)^256 Rank Audit ===
+1. OrthoSigma256(K) = (K_R, K_L ^ K_R):
+   rank(L_sigma):            256 / 256  (det(L_sigma) = 1)
+   rank(I ^ L_sigma):        256 / 256  (det(I ^ L_sigma) = 1)
+   Minimal polynomial:       L^2 ^ L ^ I == 0 -> True
+   Multiplicative order:     L^3 == I         -> True
+2. MulOrtho256(T, K) = (GF128Mul(T_0, K_0), GF128Mul(T_1, K_1)) with T[0]|=2, T[16]|=2:
+   Boundary T=(0x02, 0x02):  rank(L) = 256/256, rank(I ^ L) = 256/256
+   Boundary T=(0x03, 0x03):  rank(L) = 256/256, rank(I ^ L) = 256/256
+   Random clamped T trials:  100 / 100 pass (det(L)=1 & det(I^L)=1)
+3. Degenerate Unclamped Controls (Why T_i not in {0, 1} is Mandatory):
+   T=(0, 0) [zero mask]:     rank(L) = 0/256 (FAILS bijectivity), rank(I^L) = 256/256
+   T=(1, 1) [identity mask]: rank(L) = 256/256, rank(I^L) = 0/256 (FAILS orthomorphism)
+4. OWF Key-Uniqueness & Claw/MITM Security Comparison:
+   Mode                         Key DOF   Valid Keys/(M,C)  K^(0)/K^(1)/K^(2) Ranks  Classical Sec   Quantum Sec
+   ---------------------------  --------  ----------------  -----------------------  --------------  -----------
+   Unconstrained (K1, K2)       512 bits  2^256 (BROKEN)    256 / 256 / 256 (indep)  2^0 (1 query!)  2^0 (1 query)
+   1-EM Identical K2 = K1       256 bits  ~1                256 / 256 /   0 (FAILS)  2^128 (shift)   2^64
+   FAEST-Areion-128 (T * K)     128 bits  ~1 (2^-128 Coll)  128 / 128 / 128 (full)   2^128           2^64
+   FAEST-Areion-256 (T * K)     256 bits  ~1                256 / 256 / 256 (full)   2^256 (OWF)     2^128
+   FAEST-Areion-EM2-256 (Sigma) 256 bits  ~1                256 / 256 / 256 (full)   2^256 (OWF)     2^128

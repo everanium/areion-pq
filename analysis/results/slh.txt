@@ -1,0 +1,16 @@
+$ python3 analysis/run.py slh
+=== Go Empirical SLH-DSA-Areion Avalanche & Shift-Collision Audit ===
+Samples per primitive: 4096
+Primitive    InBits  OutBits  meanHW   minHW    maxHW    maxBias  maxChi2(255)
+-----------  ------  -------  -------  -------  -------  -------  ------------
+SLHF128         384      128  0.50003  0.49743  0.50189  0.04248        275.25
+SLHF256         512      256  0.50001  0.49838  0.50155  0.03564        317.88
+SLHFTEM256      512      256  0.50003  0.49838  0.50131  0.03638        302.38
+SLHH128         384      128  0.49997  0.49816  0.50234  0.03467        327.25
+SLHH256         768      256  0.50000  0.49850  0.50150  0.03589        308.00
+SLHPRF256       256      256  0.50006  0.49862  0.50127  0.03442        289.62
+--- Multi-Target Tweak-Shift Collision Test (M1' = M1 ^ W(ADRS) ^ W(ADRS')) ---
+Naive TEM(K_pub, ADRS, M1) ^ M1 collisions:  10000 / 10000 (100.0% broken as predicted)
+SLHF128 (Disjoint DM512) collisions:         0 / 10000 (0.0%)
+SLHF256 (Profile I DM512) collisions:        0 / 10000 (0.0%)
+SLHFTEM256 (Profile II MiddleTweak) colls:   0 / 10000 (0.0%)

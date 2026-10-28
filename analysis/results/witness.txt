@@ -1,0 +1,10 @@
+$ python3 analysis/run.py witness
+=== Go Empirical Witness & Round 9 Free-S-Box Verification ===
+Random P1 witness extractions & degree-2 checks:  100000 / 100000 PASS
+Random P2 witness extractions & degree-2 checks:  100000 / 100000 PASS
+Random EM2 witness extractions & degree-2 checks: 100000 / 100000 PASS
+Exhaustive 1-bit witness corruptions rejected:    46080 / 46080 (100.0%)
+Round 8->9 boundary 1-bit corruptions rejected:   5120 / 5120 (100.0%)
+Final output C 1-bit corruptions rejected (R9):   5120 / 5120 (100.0%)
+Secret key K1 1-bit corruptions rejected:         5120 / 5120 (100.0%)
+Random multi-bit witness corruptions rejected:    100000 / 100000 (100.0%)

@@ -1,0 +1,45 @@
+$ python3 analysis/run.py bounds
+=== Track 1: FAEST-Areion Witness & Signature Size Audit ===
+Variant                  lam   k_B  w_B   L_B (L_bits)   S-Boxes (Free)  tau   PK_B  SK_B   Sig_B
+-----------------------  ---  ----  ---  --------------  --------------  ---  -----  ----  ------
+FAEST-Areion-128s        16B   16B  288  304B (2432b)    320 (32 free)   13    48B   64B   6448B
+FAEST-Areion-128f        16B   16B  288  304B (2432b)    320 (32 free)   16    48B   64B   7456B
+FAEST-Areion-256s        32B   32B  288  320B (2560b)    320 (32 free)   26    64B   96B  18208B
+FAEST-Areion-256f        32B   32B  288  320B (2560b)    320 (32 free)   32    64B   96B  20512B
+FAEST-Areion-EM2-256s    32B   32B  576  608B (4864b)    640 (64 free)   26    64B   96B  25696B
+FAEST-Areion-EM2-256f    32B   32B  576  608B (4864b)    640 (64 free)   32    64B   96B  30368B
+
+--- Category 5 OWF Witness Comparison: Areion-256 vs Rijndael-256 / AES-256 ---
+OWF Construction                      Rounds  Total SB  Free SB  Witness L_B  Witness L_bits  Relative Witness Size
+------------------------------------  ------  --------  -------  -----------  --------------  ------------------------------------------
+FAEST-256 (2x AES-256 + KeySched)       14r      500        0        512 B        4096 bits   +60.0% larger
+FAEST-EM-256 (Rijndael-256 14r raw)     14r      448        0        480 B        3840 bits   +50.0% larger
+FAEST-EM-256 (Rijndael-256 13r opt)     14r      448       32        448 B        3584 bits   +40.0% larger
+FAEST-Areion-256 (Areion-256 10r)       10r      320       32        320 B        2560 bits   Baseline (-33.3% vs 3840b, -28.6% vs 3584b)
+
+=== Track 2: SLH-DSA-Areion (NIST FIPS 205) Parameter & Cost Audit ===
+Parameter Set             n   h   d   h'  a   k   len  PK_B  SK_B   Sig_B   Sign Hashes  Verify Hashes (max)
+------------------------  --  --  --  --  --  --  ---  ----  ----  ------  -----------  -------------------
+SLH-DSA-Areion-128f       16  66  22   3   6  33   35   32B   64B  17088B       96,745               11,849
+SLH-DSA-Areion-128s       16  63   7   9  12  14   35   32B   64B   7856B    1,999,851                3,922
+SLH-DSA-Areion-256f       32  68  17   4   9  35   67   64B  128B  49856B      309,420               17,505
+SLH-DSA-Areion-256s       32  64   8   8  14  22   67   64B  128B  29792B    2,781,154                8,436
+SLH-DSA-Areion-TEM-256f   32  68  17   4   9  35   67   64B  128B  49856B      309,420               17,505
+
+--- Tweakable Hash F / H Compression Cost: Areion-512 vs SHA-256 / SHA-512 / SHAKE256 ---
+Instantiation                      Core Permutation      Hardware Instruction Depth          F(ADRS, M1)       H(ADRS, M1 || M2)
+---------------------------------  --------------------  ----------------------------------  ----------------  -----------------
+SLH-DSA-Areion-128f/s (DM512)      Areion-512 (15r)      60 AESENC/LAST insns (15/blk x4)    1 call (64 B)     1 call (64 B)
+SLH-DSA-Areion-256f/s (DM512)      Areion-512 (15r)      60 AESENC/LAST insns (15/blk x4)    1 call (64 B)     2 calls (128 B)
+SLH-DSA-Areion-TEM-256f (TEM256)   Areion-256 (10r+10r)  40 AESENC/LAST insns (20r/blk)      1 call (32 B)     2 calls (128 B)
+SLH-DSA-SHA2-128f/s (FIPS 205)     SHA-256 (64r ARX)     64 sequential ARX rounds/blk        1 blk (precomp)   1 blk (precomp)
+SLH-DSA-SHA2-256f/s (FIPS 205)     SHA-256/512 (64/80r)  64/80 sequential ARX rounds/blk     1 blk (SHA-256)   1 blk (SHA-512)
+SLH-DSA-SHAKE-128/256 (FIPS 205)   Keccak-f[1600] (24r)  24 sequential 1600-bit rounds       1 perm (136 B)    1 perm (136 B)
+
+=== Track 3: Areion-TEM2-SIV Wide-Block AEAD vs Classical AEAD Bounds ===
+AEAD Construction               Block b  Key k    Nonce   Tag    Classical Bound      Quantum    Nonce-Misuse Behavior
+------------------------------  -------  -------  ------  -----  -------------------  ---------  --------------------------------------------
+AES-256-GCM (NIST SP 800-38D)    128 b    256 b    96 b   128 b  2^64.0 (birthday)    2^32.0     CATASTROPHIC (GHASH key leak + XOR stream)
+AES-256-GCM-SIV (RFC 8452)       128 b    256 b    96 b   128 b  2^64.0 (birthday)    2^32.0     128-bit MRAE (capped by 128b block birthday)
+Areion-OPP-256 (MEM 256b)        256 b    256 b   128 b   256 b  2^128.0 (birthday)   2^64.0     Nonce-respecting (mask-recovery on repeat)
+Areion-TEM2-SIV (Wide-Block)     512 b   1024 b   256 b   256 b  2^341.3 (2n/3 BBB)   2^170.7    Full 256-bit SIV + 512-bit wide-block TPRP

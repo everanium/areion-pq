@@ -1,0 +1,21 @@
+$ python3 analysis/run.py tweak
+=== SLH-DSA-Areion Tweak-Cancellation & Capacity Clamping Rank Audit ===
+Construction                                  State Width  Tweak Quotient Rank  Shift-Attack Status
+--------------------------------------------  -----------  -------------------  -------------------------------
+Naive TEM(K_pub, ADRS, M1) ^ M1               256 bits         0 / 256          BROKEN (1-query O(1) collision)
+SLHF256 (Profile I: DM512-Clamped)            512 bits     256 / 256          SECURE (256b clamped capacity)
+SLHF128 (Cat 1: Disjoint PK.seed || ADRS)     512 bits     384 / 384          SECURE (384b clamped capacity)
+SLHH128 (Cat 1: PK.seed || ADRS_compact)      512 bits     256 / 256          SECURE (128b injective compact)
+SLHFTEM256 (Profile II: TEM-MiddleTweak)      256 bits     256 / 256          SECURE (P2-whitened middle tweak)
+ADRS_compact 16-byte injective rank:          128 bits     128 / 128          100% injective on FIPS 205 ADRS
+
+=== Ideal Permutation Model (IPM) Multi-Target Security Bounds (T <= 2^64) ===
+Primitive / Property           State b  Cap c   Out n  Classical Bound (bits)  Quantum / Grover Bound (bits)  NIST Target
+-----------------------------  -------  ------  -----  ----------------------  -----------------------------  -----------
+SLHF128 (SM-TCR / SM-PRE)       512 b    384 b  128 b  2^128.0                 2^64.0                         Cat 1 (128c / 64q)
+SLHH128 (SM-TCR / SM-PRE)       512 b    256 b  128 b  2^128.0                 2^64.0                         Cat 1 (128c / 64q)
+SLHPRF128 (SoEM256 PRF)         256 b    512 b  128 b  2^170.7                 2^85.3                         Cat 1 (128c / 64q)
+SLHF256 (Profile I DM512)       512 b    256 b  256 b  2^255.0                 2^128.0                        Cat 5 (256c / 128q)
+SLHFTEM256 (Profile II TEM)     256 b    256 b  256 b  2^254.0                 2^127.0                        Cat 5 (256c / 128q)
+SLHH256 (2-Step DM512)          512 b    256 b  256 b  2^255.0                 2^128.0                        Cat 5 (256c / 128q)
+SLHPRF256 (SoEM256 PRF)         256 b    512 b  256 b  2^170.7                 2^85.3                         Cat 5 (PRF BBB)

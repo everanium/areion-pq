@@ -1,0 +1,4 @@
+github.com/everanium/areion v0.1.5 h1:O5X5rfjHeG0pRlH6JPdv+O/wnz4dbbeKr5uEBOnNJtg=
+github.com/everanium/areion v0.1.5/go.mod h1:1epBS7WdF3D9cBDiu/r3iiRzZmVi7jhk/Y49DnZOpxI=
+golang.org/x/sys v0.49.0 h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
+golang.org/x/sys v0.49.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
