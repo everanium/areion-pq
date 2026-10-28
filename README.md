@@ -174,7 +174,7 @@ At package initialization, `areion-pq` probes CPU capabilities (`cpu_amd64.go`, 
 
 ### 1. Intel® Core™ i7-11700K @ 3.60GHz (Rocket Lake, x86-64)
 
-3-run averaged throughput measured across all 5 execution tiers on the same physical CPU (`taskset -c 2`, `f = 3.60 GHz`):
+3-run averaged throughput measured across all 5 execution tiers on the same physical CPU (`f = 3.60 GHz`):
 
 #### Finite-Field, Witness Extraction, KDF & Wide-Block AEAD Primitives (MB/s, ns/op)
 
@@ -211,7 +211,7 @@ On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`240.2 us` (`4,1
 
 ### 2. AWS Graviton 4 (`c8g.4xlarge`, Neoverse-V2, 16 vCPUs, ARM64)
 
-3-run averaged throughput measured on AWS Graviton 4 (`taskset -c 2`, `purego` bitsliced fallback vs `arm64` ARMv8 Cryptographic Extension at `f = 2.80 GHz`):
+3-run averaged throughput measured on AWS Graviton 4 (`purego` bitsliced fallback vs `arm64` ARMv8 Cryptographic Extension at `f = 2.80 GHz`):
 
 #### Finite-Field, Witness Extraction, KDF & Wide-Block AEAD Primitives (MB/s, ns/op)
 
@@ -301,12 +301,13 @@ qemu-aarch64-static /tmp/areion_pq_arm64.test -test.v
 # Auto-selected tier:
 go test -run=^none -bench=. -benchmem ./...
 
-# Benchmark individual tiers pinned to a single physical core:
-AREION_PQ_FORCE_TIER=purego taskset -c 2 go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=aesni taskset -c 2 go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=vex taskset -c 2 go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=vaesavx2 taskset -c 2 go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=avx512 taskset -c 2 go test -run=^none -bench=. -benchtime=100ms .
+# Benchmark individual tiers:
+AREION_PQ_FORCE_TIER=purego go test -run=^none -bench=. -benchtime=100ms .
+AREION_PQ_FORCE_TIER=aesni go test -run=^none -bench=. -benchtime=100ms .
+AREION_PQ_FORCE_TIER=vex go test -run=^none -bench=. -benchtime=100ms .
+AREION_PQ_FORCE_TIER=vaesavx2 go test -run=^none -bench=. -benchtime=100ms .
+AREION_PQ_FORCE_TIER=avx512 go test -run=^none -bench=. -benchtime=100ms .
+AREION_PQ_FORCE_TIER=arm64 go test -run=^none -bench=. -benchtime=100ms .
 ```
 
 ### 4. Run Cryptanalytic & Algebraic Verification Suite
