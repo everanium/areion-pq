@@ -388,19 +388,22 @@ func extractWitness256Software(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byte, r
 }
 
 func ctDiff32(a, b *[32]byte) uint64 {
-	var d uint64
-	for i := 0; i < 32; i += 8 {
-		d |= binary.LittleEndian.Uint64(a[i:i+8]) ^ binary.LittleEndian.Uint64(b[i:i+8])
-	}
-	return d
+	return (binary.LittleEndian.Uint64(a[0:8]) ^ binary.LittleEndian.Uint64(b[0:8])) |
+		(binary.LittleEndian.Uint64(a[8:16]) ^ binary.LittleEndian.Uint64(b[8:16])) |
+		(binary.LittleEndian.Uint64(a[16:24]) ^ binary.LittleEndian.Uint64(b[16:24])) |
+		(binary.LittleEndian.Uint64(a[24:32]) ^ binary.LittleEndian.Uint64(b[24:32]))
 }
 
 func ctDiff288(a, b *[288]byte) uint64 {
-	var d uint64
-	for i := 0; i < 288; i += 8 {
-		d |= binary.LittleEndian.Uint64(a[i:i+8]) ^ binary.LittleEndian.Uint64(b[i:i+8])
-	}
-	return d
+	return ctDiff32((*[32]byte)(a[0:32]), (*[32]byte)(b[0:32])) |
+		ctDiff32((*[32]byte)(a[32:64]), (*[32]byte)(b[32:64])) |
+		ctDiff32((*[32]byte)(a[64:96]), (*[32]byte)(b[64:96])) |
+		ctDiff32((*[32]byte)(a[96:128]), (*[32]byte)(b[96:128])) |
+		ctDiff32((*[32]byte)(a[128:160]), (*[32]byte)(b[128:160])) |
+		ctDiff32((*[32]byte)(a[160:192]), (*[32]byte)(b[160:192])) |
+		ctDiff32((*[32]byte)(a[192:224]), (*[32]byte)(b[192:224])) |
+		ctDiff32((*[32]byte)(a[224:256]), (*[32]byte)(b[224:256])) |
+		ctDiff32((*[32]byte)(a[256:288]), (*[32]byte)(b[256:288]))
 }
 
 //go:noinline

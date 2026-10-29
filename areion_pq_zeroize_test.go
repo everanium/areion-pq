@@ -283,23 +283,34 @@ func TestFusedKernelsLeaveNoSecretInFrame(t *testing.T) {
 			cPub := new([32]byte)
 			wPub := new([288]byte)
 			if written := captureAreionFrameAndRegResidue(func() {
-				*cPub, *wPub = ExtractWitness256(m, k1, k2)
+				ExtractWitness256(cPub, wPub, m, k1, k2)
 			}, res); written == 0 {
 				t.Fatalf("[%s] ExtractWitness256: probe missed stack window", tier)
 			}
-			if word, off, found := scanForAreionWords(res, bytesToNonZeroWords(m[:], k1[:], k2[:])); found {
-				t.Fatalf("[%s] ExtractWitness256 leaked secret input word %#016x at offset %d", tier, word, off)
+			if word, off, found := scanForAreionWords(res, bytesToNonZeroWords(m[:], k1[:], k2[:], cPub[:], wPub[:])); found {
+				t.Fatalf("[%s] ExtractWitness256 leaked word %#016x at offset %d", tier, word, off)
+			}
+
+			cP2 := new([32]byte)
+			wP2 := new([288]byte)
+			if written := captureAreionFrameAndRegResidue(func() {
+				ExtractWitness256P2(cP2, wP2, m, k1, k2)
+			}, res); written == 0 {
+				t.Fatalf("[%s] ExtractWitness256P2: probe missed stack window", tier)
+			}
+			if word, off, found := scanForAreionWords(res, bytesToNonZeroWords(m[:], k1[:], k2[:], cP2[:], wP2[:])); found {
+				t.Fatalf("[%s] ExtractWitness256P2 leaked word %#016x at offset %d", tier, word, off)
 			}
 
 			cEM2 := new([32]byte)
 			wEM2 := new([576]byte)
 			if written := captureAreionFrameAndRegResidue(func() {
-				*cEM2, *wEM2 = ExtractWitnessEM2_256(m, k1, k2)
+				ExtractWitnessEM2_256(cEM2, wEM2, m, k1, k2)
 			}, res); written == 0 {
 				t.Fatalf("[%s] ExtractWitnessEM2_256: probe missed stack window", tier)
 			}
-			if word, off, found := scanForAreionWords(res, bytesToNonZeroWords(m[:], k1[:], k2[:])); found {
-				t.Fatalf("[%s] ExtractWitnessEM2_256 leaked secret input word %#016x at offset %d", tier, word, off)
+			if word, off, found := scanForAreionWords(res, bytesToNonZeroWords(m[:], k1[:], k2[:], cEM2[:], wEM2[:])); found {
+				t.Fatalf("[%s] ExtractWitnessEM2_256 leaked word %#016x at offset %d", tier, word, off)
 			}
 
 			if written := captureAreionFrameAndRegResidue(func() {

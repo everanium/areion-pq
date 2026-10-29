@@ -18,11 +18,11 @@ func voleXorRowNEONAsm(dst, src *byte, n int)
 func clobberScratchGPRs()
 
 func hasHardwareExtractWitness256() bool {
-	return hasARMCrypto && TierCode() != TierPureGo
+	return TierCode() != TierPureGo
 }
 
 func dispatchExtractWitness256(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byte, rc *[10][16]byte) {
-	if hasARMCrypto && TierCode() != TierPureGo {
+	if TierCode() != TierPureGo {
 		areion256ExtractWitnessAsm(c, w, m, k1, k2, rc)
 		return
 	}

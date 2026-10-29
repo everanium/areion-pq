@@ -21,7 +21,7 @@ var raceEnabled = func() bool {
 }()
 
 func TestVersionAndConstants(t *testing.T) {
-	if Version != "0.1.1" || VersionMajor != 0 || VersionMinor != 1 || VersionPatch != 1 {
+	if Version != "0.2.0" || VersionMajor != 0 || VersionMinor != 2 || VersionPatch != 0 {
 		t.Fatalf("unexpected version %s (%d.%d.%d)", Version, VersionMajor, VersionMinor, VersionPatch)
 	}
 	if BlockSize != 16 || State256Size != 32 || State512Size != 64 {
@@ -247,15 +247,21 @@ func TestWitnessExtractionAndVerificationCrossTier(t *testing.T) {
 	if err := SetTier("purego"); err != nil {
 		t.Fatal(err)
 	}
-	refC1, refW1 := ExtractWitness256(&m, &k1, &k2)
-	refC2, refW2 := ExtractWitness256P2(&m, &k1, &k2)
-	refCEM2, refWEM2 := ExtractWitnessEM2_256(&m, &k1, &k2)
+	var refC1, refC2, refCEM2 [32]byte
+	var refW1, refW2 [288]byte
+	var refWEM2 [576]byte
+	ExtractWitness256(&refC1, &refW1, &m, &k1, &k2)
+	ExtractWitness256P2(&refC2, &refW2, &m, &k1, &k2)
+	ExtractWitnessEM2_256(&refCEM2, &refWEM2, &m, &k1, &k2)
 
 	for _, tier := range AvailableTiers() {
 		if err := SetTier(tier); err != nil {
 			t.Fatal(err)
 		}
-		c1, w1 := ExtractWitness256(&m, &k1, &k2)
+		var c1, c2, cEM2 [32]byte
+		var w1, w2 [288]byte
+		var wEM2 [576]byte
+		ExtractWitness256(&c1, &w1, &m, &k1, &k2)
 		if c1 != refC1 || w1 != refW1 {
 			t.Fatalf("[%s] ExtractWitness256 mismatch with purego", tier)
 		}
@@ -263,7 +269,7 @@ func TestWitnessExtractionAndVerificationCrossTier(t *testing.T) {
 			t.Fatalf("[%s] VerifyWitness256 rejected valid witness", tier)
 		}
 
-		c2, w2 := ExtractWitness256P2(&m, &k1, &k2)
+		ExtractWitness256P2(&c2, &w2, &m, &k1, &k2)
 		if c2 != refC2 || w2 != refW2 {
 			t.Fatalf("[%s] ExtractWitness256P2 mismatch with purego", tier)
 		}
@@ -271,7 +277,7 @@ func TestWitnessExtractionAndVerificationCrossTier(t *testing.T) {
 			t.Fatalf("[%s] VerifyWitness256P2 rejected valid witness", tier)
 		}
 
-		cEM2, wEM2 := ExtractWitnessEM2_256(&m, &k1, &k2)
+		ExtractWitnessEM2_256(&cEM2, &wEM2, &m, &k1, &k2)
 		if cEM2 != refCEM2 || wEM2 != refWEM2 {
 			t.Fatalf("[%s] ExtractWitnessEM2_256 mismatch with purego", tier)
 		}
@@ -837,17 +843,19 @@ func BenchmarkGF128PolyMAC16(b *testing.B) {
 }
 
 func BenchmarkExtractWitness256(b *testing.B) {
-	var m, k1, k2 [32]byte
+	var c, m, k1, k2 [32]byte
+	var w [288]byte
 	b.SetBytes(288)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = ExtractWitness256(&m, &k1, &k2)
+		ExtractWitness256(&c, &w, &m, &k1, &k2)
 	}
 }
 
 func BenchmarkVerifyWitness256(b *testing.B) {
-	var m, k1, k2 [32]byte
-	c, w := ExtractWitness256(&m, &k1, &k2)
+	var c, m, k1, k2 [32]byte
+	var w [288]byte
+	ExtractWitness256(&c, &w, &m, &k1, &k2)
 	b.SetBytes(288)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -858,17 +866,19 @@ func BenchmarkVerifyWitness256(b *testing.B) {
 }
 
 func BenchmarkExtractWitnessEM2_256(b *testing.B) {
-	var m, k1, k2 [32]byte
+	var c, m, k1, k2 [32]byte
+	var w [576]byte
 	b.SetBytes(576)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = ExtractWitnessEM2_256(&m, &k1, &k2)
+		ExtractWitnessEM2_256(&c, &w, &m, &k1, &k2)
 	}
 }
 
 func BenchmarkVerifyWitnessEM2_256(b *testing.B) {
-	var m, k1, k2 [32]byte
-	c, w := ExtractWitnessEM2_256(&m, &k1, &k2)
+	var c, m, k1, k2 [32]byte
+	var w [576]byte
+	ExtractWitnessEM2_256(&c, &w, &m, &k1, &k2)
 	b.SetBytes(576)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

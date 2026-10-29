@@ -41,10 +41,10 @@ Built on **[`everanium/areion`](https://github.com/everanium/areion)**; companio
 
 | Constant | Value | Description |
 | :--- | :---: | :--- |
-| `Version` | `"0.1.1"` | Semantic version string of `areion-pq` |
+| `Version` | `"0.2.0"` | Semantic version string of `areion-pq` |
 | `VersionMajor` | `0` | Major version number |
-| `VersionMinor` | `1` | Minor version number |
-| `VersionPatch` | `1` | Patch version number |
+| `VersionMinor` | `2` | Minor version number |
+| `VersionPatch` | `0` | Patch version number |
 | `BlockSize` | `16` | 128-bit AES / `GF(2^128)` block size in bytes |
 | `State256Size` | `32` | 256-bit `Areion-256` permutation state size in bytes |
 | `State512Size` | `64` | 512-bit `Areion-512` permutation state size in bytes |
@@ -140,11 +140,11 @@ By the Free-Round Witness Theorem ([`analysis/README.md`](analysis/README.md#a-f
 
 | Function Signature | Witness Size | S-Boxes (Free) | Description |
 | :--- | :---: | :---: | :--- |
-| `ExtractWitness256(m, k1, k2 *[32]byte) (c [32]byte, w [288]byte)` | 288 B | 320 (32 free) | Computes `C = P1_256(M ⊕ K1) ⊕ K2` and extracts the 288-byte committed witness for rounds `0..8` of `P1` |
-| `ExtractWitness256P2(m, k1, k2 *[32]byte) (c [32]byte, w [288]byte)` | 288 B | 320 (32 free) | Computes `C = P2_256(M ⊕ K1) ⊕ K2` and extracts the 288-byte committed witness for rounds `0..8` of `P2` |
+| `ExtractWitness256(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byte)` | 288 B | 320 (32 free) | Computes `C = P1_256(M ⊕ K1) ⊕ K2` into `c` and extracts the 288-byte committed witness for rounds `0..8` of `P1` into `w` |
+| `ExtractWitness256P2(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byte)` | 288 B | 320 (32 free) | Computes `C = P2_256(M ⊕ K1) ⊕ K2` into `c` and extracts the 288-byte committed witness for rounds `0..8` of `P2` into `w` |
 | `VerifyWitness256(m, c, k1, k2 *[32]byte, w *[288]byte) bool` | 288 B | 320 (32 free) | Constant-time algebraic verification of all 320 S-box degree-2 `GF(2^8)` equations of `P1_256` |
 | `VerifyWitness256P2(m, c, k1, k2 *[32]byte, w *[288]byte) bool` | 288 B | 320 (32 free) | Constant-time algebraic verification of all 320 S-box degree-2 `GF(2^8)` equations of `P2_256` |
-| `ExtractWitnessEM2_256(m, k1, k2 *[32]byte) (c [32]byte, w [576]byte)` | 576 B | 640 (64 free) | Computes `C = P2_256(P1_256(M ⊕ K1) ⊕ K2) ⊕ K1 ⊕ K2` and extracts the 576-byte witness (`288 B` `P1` + `288 B` `P2`) |
+| `ExtractWitnessEM2_256(c *[32]byte, w *[576]byte, m, k1, k2 *[32]byte)` | 576 B | 640 (64 free) | Computes `C = P2_256(P1_256(M ⊕ K1) ⊕ K2) ⊕ K1 ⊕ K2` into `c` and extracts the 576-byte witness (`288 B` `P1` + `288 B` `P2`) into `w` |
 | `VerifyWitnessEM2_256(m, c, k1, k2 *[32]byte, w *[576]byte) bool` | 576 B | 640 (64 free) | Constant-time algebraic verification of all 640 S-box degree-2 `GF(2^8)` equations across `P1_256` and `P2_256` |
 
 ---

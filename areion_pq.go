@@ -201,19 +201,21 @@ func OrthoSigma256(k *[32]byte) [32]byte {
 	return out
 }
 
-// ExtractWitness256 computes C = P1(M ⊕ K1) ⊕ K2 and extracts the 288-byte
-// committed S-box witness w for rounds 0..8 of 10-round Areion-256 (P1).
+var zeroBlock32 [32]byte
+
+// ExtractWitness256 computes C = P1(M ⊕ K1) ⊕ K2 and writes the 32-byte
+// ciphertext into c and the 288-byte committed S-box witness for rounds 0..8
+// of 10-round Areion-256 (P1) into w.
 // Round 9 requires zero witness bytes because its output is C ⊕ K2.
-func ExtractWitness256(m, k1, k2 *[32]byte) (c [32]byte, w [288]byte) {
-	dispatchExtractWitness256(&c, &w, m, k1, k2, &roundConstantsP1)
-	return c, w
+func ExtractWitness256(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byte) {
+	dispatchExtractWitness256(c, w, m, k1, k2, &roundConstantsP1)
 }
 
-// ExtractWitness256P2 computes C = P2(M ⊕ K1) ⊕ K2 and extracts the 288-byte
-// committed S-box witness w for rounds 0..8 of 10-round Areion-256P2 (P2).
-func ExtractWitness256P2(m, k1, k2 *[32]byte) (c [32]byte, w [288]byte) {
-	dispatchExtractWitness256(&c, &w, m, k1, k2, &roundConstantsP2)
-	return c, w
+// ExtractWitness256P2 computes C = P2(M ⊕ K1) ⊕ K2 and writes the 32-byte
+// ciphertext into c and the 288-byte committed S-box witness for rounds 0..8
+// of 10-round Areion-256P2 (P2) into w.
+func ExtractWitness256P2(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byte) {
+	dispatchExtractWitness256(c, w, m, k1, k2, &roundConstantsP2)
 }
 
 // VerifyWitness256 algebraically verifies all 320 S-box degree-2 GF(2^8) equations
@@ -229,31 +231,37 @@ func VerifyWitness256P2(m, c, k1, k2 *[32]byte, w *[288]byte) bool {
 }
 
 //go:noinline
-func extractWitnessEM2_256Body(c *[32]byte, w *[576]byte, m, k1, k2 *[32]byte) {
-	var zero32, uP1, k12 [32]byte
+func extractWitnessEM2_256SoftwareBody(c *[32]byte, w *[576]byte, m, k1, k2 *[32]byte) {
+	var uP1, k12 [32]byte
 	xor32(&k12, k1, k2)
-	dispatchExtractWitness256(&uP1, (*[288]byte)(w[0:288]), m, k1, &zero32, &roundConstantsP1)
-	dispatchExtractWitness256(c, (*[288]byte)(w[288:576]), &uP1, k2, &k12, &roundConstantsP2)
-	clear(uP1[:])
-	clear(k12[:])
-	runtime.KeepAlive(&uP1)
-	runtime.KeepAlive(&k12)
+	extractWitness256SoftwareBody(&uP1, (*[288]byte)(w[0:288]), m, k1, &zeroBlock32, &roundConstantsP1)
+	extractWitness256SoftwareBody(c, (*[288]byte)(w[288:576]), &uP1, k2, &k12, &roundConstantsP2)
 }
 
-// ExtractWitnessEM2_256 computes C = P2(P1(M ⊕ K1) ⊕ K2) ⊕ K1 ⊕ K2 and extracts
-// the 576-byte witness w (288 bytes for P1 rounds 0..8 + 288 bytes for P2 rounds 0..8).
-func ExtractWitnessEM2_256(m, k1, k2 *[32]byte) (c [32]byte, w [576]byte) {
-	extractWitnessEM2_256Body(&c, &w, m, k1, k2)
-	if !hasHardwareExtractWitness256() {
-		wipeSoftwareStack()
+// ExtractWitnessEM2_256 computes C = P2(P1(M ⊕ K1) ⊕ K2) ⊕ K1 ⊕ K2 and writes
+// the 32-byte ciphertext into c and the 576-byte witness (288 bytes for P1
+// rounds 0..8 + 288 bytes for P2 rounds 0..8) into w.
+func ExtractWitnessEM2_256(c *[32]byte, w *[576]byte, m, k1, k2 *[32]byte) {
+	if hasHardwareExtractWitness256() {
+		var uP1, k12 [32]byte
+		xor32(&k12, k1, k2)
+		dispatchExtractWitness256(&uP1, (*[288]byte)(w[0:288]), m, k1, &zeroBlock32, &roundConstantsP1)
+		dispatchExtractWitness256(c, (*[288]byte)(w[288:576]), &uP1, k2, &k12, &roundConstantsP2)
+		clear(uP1[:])
+		clear(k12[:])
+		runtime.KeepAlive(&uP1)
+		runtime.KeepAlive(&k12)
+		clobberScratchGPRs()
+		return
 	}
+	extractWitnessEM2_256SoftwareBody(c, w, m, k1, k2)
+	wipeSoftwareStack()
 	clobberScratchGPRs()
-	return c, w
 }
 
 //go:noinline
 func verifyWitnessEM2_256SoftwareBody(m, c, k1, k2 *[32]byte, w *[576]byte) bool {
-	var zero32, uP1, k12 [32]byte
+	var uP1, k12 [32]byte
 	var x0, x1, aNext, u9, bNext [16]byte
 	var q, qRC bsState
 	copy(x0[:], w[256:272])
@@ -279,27 +287,8 @@ func verifyWitnessEM2_256SoftwareBody(m, c, k1, k2 *[32]byte, w *[576]byte) bool
 	copy(uP1[16:32], aNext[:])
 	xor32(&k12, k1, k2)
 
-	ok1 := verifyWitness256SoftwareBody(m, &uP1, k1, &zero32, (*[288]byte)(w[0:288]), &roundConstantsP1)
+	ok1 := verifyWitness256SoftwareBody(m, &uP1, k1, &zeroBlock32, (*[288]byte)(w[0:288]), &roundConstantsP1)
 	ok2 := verifyWitness256SoftwareBody(&uP1, c, k2, &k12, (*[288]byte)(w[288:576]), &roundConstantsP2)
-
-	clear(uP1[:])
-	clear(k12[:])
-	clear(x0[:])
-	clear(x1[:])
-	clear(aNext[:])
-	clear(u9[:])
-	clear(bNext[:])
-	clear(q[:])
-	clear(qRC[:])
-	runtime.KeepAlive(&uP1)
-	runtime.KeepAlive(&k12)
-	runtime.KeepAlive(&x0)
-	runtime.KeepAlive(&x1)
-	runtime.KeepAlive(&aNext)
-	runtime.KeepAlive(&u9)
-	runtime.KeepAlive(&bNext)
-	runtime.KeepAlive(&q)
-	runtime.KeepAlive(&qRC)
 
 	return ok1 && ok2
 }
@@ -308,10 +297,10 @@ func verifyWitnessEM2_256SoftwareBody(m, c, k1, k2 *[32]byte, w *[576]byte) bool
 // across P1 and P2 for C = P2(P1(M ⊕ K1) ⊕ K2) ⊕ K1 ⊕ K2 in constant time.
 func VerifyWitnessEM2_256(m, c, k1, k2 *[32]byte, w *[576]byte) bool {
 	if hasHardwareExtractWitness256() {
-		var zero32, uP1, k12, cExp [32]byte
+		var uP1, k12, cExp [32]byte
 		var wP1Exp, wP2Exp [288]byte
 		xor32(&k12, k1, k2)
-		dispatchExtractWitness256(&uP1, &wP1Exp, m, k1, &zero32, &roundConstantsP1)
+		dispatchExtractWitness256(&uP1, &wP1Exp, m, k1, &zeroBlock32, &roundConstantsP1)
 		dispatchExtractWitness256(&cExp, &wP2Exp, &uP1, k2, &k12, &roundConstantsP2)
 		diff := ctDiff288((*[288]byte)(w[0:288]), &wP1Exp) |
 			ctDiff288((*[288]byte)(w[288:576]), &wP2Exp) |
@@ -2813,7 +2802,7 @@ func faestSignCoreBody(p *faestParams, sk, msg, optRand, sigOut []byte) {
 	} else {
 		var k2, cDummy [32]byte
 		orthoSigma256Body(&k2, &k32)
-		extractWitnessEM2_256Body(&cDummy, (*[576]byte)(wFull[p.kBytes:p.lBytes]), &mPub, &k32, &k2)
+		ExtractWitnessEM2_256(&cDummy, (*[576]byte)(wFull[p.kBytes:p.lBytes]), &mPub, &k32, &k2)
 		clear(k2[:])
 		clear(cDummy[:])
 		runtime.KeepAlive(&k2)

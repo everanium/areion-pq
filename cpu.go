@@ -255,12 +255,15 @@ func SelfTest() error {
 		Zeroize(k1[:])
 		Zeroize(k2[:])
 	}()
-	c, w := ExtractWitness256(&m, &k1, &k2)
+	var c, cEM2 [32]byte
+	var w [288]byte
+	var wEM2 [576]byte
+	ExtractWitness256(&c, &w, &m, &k1, &k2)
 	defer Zeroize(w[:])
 	if !VerifyWitness256(&m, &c, &k1, &k2, &w) {
 		return errors.New("areionpq: SelfTest VerifyWitness256 failed")
 	}
-	cEM2, wEM2 := ExtractWitnessEM2_256(&m, &k1, &k2)
+	ExtractWitnessEM2_256(&cEM2, &wEM2, &m, &k1, &k2)
 	defer Zeroize(wEM2[:])
 	if !VerifyWitnessEM2_256(&m, &cEM2, &k1, &k2, &wEM2) {
 		return errors.New("areionpq: SelfTest VerifyWitnessEM2_256 failed")

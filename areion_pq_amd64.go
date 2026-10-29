@@ -33,16 +33,16 @@ func voleXorRowAVX512Asm(dst, src *byte, n int)
 func clobberScratchGPRs()
 
 func hasHardwareExtractWitness256() bool {
-	return hasAESNI && TierCode() >= TierAESNI
+	return TierCode() >= TierAESNI
 }
 
 func dispatchExtractWitness256(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byte, rc *[10][16]byte) {
 	tier := TierCode()
-	if hasVEX && tier >= TierVEX {
+	if tier >= TierVEX {
 		areion256ExtractWitnessVexAsm(c, w, m, k1, k2, rc)
 		return
 	}
-	if hasAESNI && tier >= TierAESNI {
+	if tier >= TierAESNI {
 		areion256ExtractWitnessAsm(c, w, m, k1, k2, rc)
 		return
 	}
