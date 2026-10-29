@@ -180,34 +180,34 @@ At package initialization, `areion-pq` probes CPU capabilities (`cpu_amd64.go`, 
 
 | Operation | `purego` | `aesni` | `vex` | `vaesavx2` | `avx512` | `c/B` (best) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`GF128Mul` (16 B)** | 66.9 (240.13 ns) | 3,483.9 (4.60 ns) | 3,785.5 (4.25 ns) | 3,830.3 (4.18 ns) | 3,854.1 (4.16 ns) | 0.94 c/B |
-| **`GF128PolyMAC` (16 blocks, 256 B)** | 30.0 (8,691.67 ns) | 2,489.9 (102.83 ns) | 2,517.5 (101.70 ns) | 2,552.9 (100.28 ns) | 2,544.6 (100.60 ns) | 1.41 c/B |
-| **`ExtractWitness256` (288 B)** | 243.6 (1,183.00 ns) | 14,421.5 (19.99 ns) | 14,681.4 (19.64 ns) | 14,439.5 (19.96 ns) | 14,884.8 (19.36 ns) | 0.24 c/B |
-| **`VerifyWitness256` (288 B)** | 22.2 (12,964.33 ns) | 6,632.1 (43.46 ns) | 7,126.0 (40.45 ns) | 7,179.6 (40.16 ns) | 7,023.4 (41.01 ns) | 0.50 c/B |
-| **`ExtractWitnessEM2_256` (576 B)** | 247.0 (2,332.67 ns) | 9,151.0 (63.14 ns) | 9,414.6 (61.22 ns) | 9,385.0 (61.51 ns) | 8,978.5 (64.22 ns) | 0.38 c/B |
-| **`VerifyWitnessEM2_256` (576 B)** | 20.8 (27,833.00 ns) | 8,115.3 (71.11 ns) | 9,039.1 (63.73 ns) | 8,442.4 (68.54 ns) | 8,802.1 (65.52 ns) | 0.40 c/B |
-| **`KDFExpand` (1,024 B)** | 40.6 (25,216.67 ns) | 1,619.0 (636.27 ns) | 1,698.7 (604.07 ns) | 2,132.2 (480.33 ns) | 2,194.8 (466.67 ns) | 1.64 c/B |
-| **`TEM2SIVEncrypt` (4,096 B)** | 19.2 (213,198.67 ns) | 623.2 (6,667.33 ns) | 689.8 (5,950.67 ns) | 1,072.3 (3,823.67 ns) | 1,173.3 (3,492.00 ns) | 3.07 c/B |
-| **`TEM2SIVDecrypt` (4,096 B)** | 18.4 (222,899.67 ns) | 470.2 (8,718.00 ns) | 487.1 (8,430.33 ns) | 758.7 (5,401.33 ns) | 931.3 (4,403.00 ns) | 3.87 c/B |
+| **`GF128Mul` (16 B)** | 63.4 (252.63 ns) | 3,356.4 (4.77 ns) | 3,868.1 (4.14 ns) | 3,865.9 (4.14 ns) | 3,893.9 (4.11 ns) | 0.92 c/B |
+| **`GF128PolyMAC` (16 blocks, 256 B)** | 30.1 (8,521.00 ns) | 2,505.8 (102.17 ns) | 2,513.9 (101.83 ns) | 2,541.5 (100.72 ns) | 2,517.2 (101.67 ns) | 1.42 c/B |
+| **`ExtractWitness256` (288 B)** | 241.5 (1,193.33 ns) | 14,638.8 (19.68 ns) | 14,917.9 (19.32 ns) | 14,834.9 (19.42 ns) | 15,070.4 (19.11 ns) | 0.24 c/B |
+| **`VerifyWitness256` (288 B)** | 22.2 (12,989.67 ns) | 8,349.9 (34.49 ns) | 8,000.1 (36.02 ns) | 8,036.7 (35.84 ns) | 8,175.3 (35.23 ns) | 0.43 c/B |
+| **`ExtractWitnessEM2_256` (576 B)** | 240.9 (2,391.67 ns) | 15,067.5 (38.23 ns) | 14,817.2 (38.94 ns) | 15,220.4 (37.85 ns) | 15,034.8 (38.32 ns) | 0.24 c/B |
+| **`VerifyWitnessEM2_256` (576 B)** | 22.2 (25,946.67 ns) | 7,801.9 (73.83 ns) | 7,504.7 (76.75 ns) | 7,634.6 (75.48 ns) | 7,626.5 (75.56 ns) | 0.46 c/B |
+| **`KDFExpand` (1,024 B)** | 38.3 (26,725.33 ns) | 1,621.9 (632.10 ns) | 1,680.6 (609.80 ns) | 2,165.2 (472.93 ns) | 2,103.8 (486.90 ns) | 1.66 c/B |
+| **`TEM2SIVEncrypt` (4,096 B)** | 18.8 (217,994.33 ns) | 697.3 (5,875.00 ns) | 707.4 (5,791.33 ns) | 1,086.2 (3,771.33 ns) | 1,202.2 (3,407.33 ns) | 2.99 c/B |
+| **`TEM2SIVDecrypt` (4,096 B)** | 18.2 (225,308.33 ns) | 490.4 (8,355.33 ns) | 503.0 (8,143.33 ns) | 794.7 (5,154.33 ns) | 983.0 (4,168.67 ns) | 3.66 c/B |
 
 #### Post-Quantum Signatures: `FAEST-Areion` & `SLH-DSA-Areion` (ops/s, ns/op)
 
 | Operation | `purego` | `aesni` | `vex` | `vaesavx2` | `avx512` | Speedup vs `purego` |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`FAESTSign128f`** | 20.9 (47,744,426 ns) | 444.8 (2,248,117 ns) | 436.0 (2,293,664 ns) | 481.3 (2,077,727 ns) | 501.7 (1,993,084 ns) | 24.0× |
-| **`FAESTVerify128f`** | 23.2 (43,154,571 ns) | 470.0 (2,127,787 ns) | 464.9 (2,150,820 ns) | 561.4 (1,781,120 ns) | 560.1 (1,785,262 ns) | 24.2× |
-| **`FAESTSign256f`** | 9.5 (105,015,860 ns) | 190.2 (5,258,892 ns) | 205.2 (4,873,775 ns) | 242.5 (4,124,370 ns) | 237.5 (4,210,536 ns) | 25.5× |
-| **`FAESTVerify256f`** | 9.7 (102,717,572 ns) | 224.8 (4,448,397 ns) | 229.0 (4,366,930 ns) | 263.6 (3,792,968 ns) | 262.8 (3,804,950 ns) | 27.1× |
-| **`FAESTEM2Sign256f`** | 6.6 (152,596,627 ns) | 126.2 (7,926,125 ns) | 131.2 (7,619,677 ns) | 160.0 (6,250,901 ns) | 149.4 (6,691,700 ns) | 24.4× |
-| **`FAESTEM2Verify256f`** | 6.7 (149,890,488 ns) | 146.2 (6,841,072 ns) | 145.7 (6,865,404 ns) | 177.7 (5,627,045 ns) | 185.7 (5,384,053 ns) | 27.8× |
-| **`SLHDSASign128f`** | 5.6 (179,976,006 ns) | 255.0 (3,922,185 ns) | 257.9 (3,878,064 ns) | 255.4 (3,916,023 ns) | 260.7 (3,836,538 ns) | 46.9× |
-| **`SLHDSAVerify128f`** | 92.0 (10,863,714 ns) | 4,149.6 (240,990 ns) | 4,147.0 (241,139 ns) | 4,095.2 (244,186 ns) | 4,163.3 (240,194 ns) | 45.2× |
-| **`SLHDSASign256f`** | 3.2 (317,441,079 ns) | 146.9 (6,805,355 ns) | 140.3 (7,129,967 ns) | 167.5 (5,968,646 ns) | 160.8 (6,217,222 ns) | 53.2× |
-| **`SLHDSAVerify256f`** | 59.7 (16,753,798 ns) | 3,328.1 (300,475 ns) | 3,407.9 (293,436 ns) | 3,334.8 (299,866 ns) | 3,349.5 (298,550 ns) | 57.1× |
-| **`SLHDSATEMSign256f`** | 1.6 (643,283,911 ns) | 68.8 (14,545,397 ns) | 68.9 (14,513,146 ns) | 69.6 (14,375,919 ns) | 69.6 (14,369,514 ns) | 44.8× |
-| **`SLHDSATEMVerify256f`** | 55.3 (18,090,717 ns) | 2,407.9 (415,299 ns) | 2,429.5 (411,613 ns) | 2,461.7 (406,220 ns) | 2,442.3 (409,442 ns) | 44.5× |
+| **`FAESTSign128f`** | 23.1 (43,242,788 ns) | 465.3 (2,149,089 ns) | 494.1 (2,024,076 ns) | 551.4 (1,813,532 ns) | 609.9 (1,639,488 ns) | 26.4× |
+| **`FAESTVerify128f`** | 24.0 (41,718,782 ns) | 505.6 (1,978,000 ns) | 517.0 (1,934,255 ns) | 576.3 (1,735,250 ns) | 607.8 (1,645,204 ns) | 25.4× |
+| **`FAESTSign256f`** | 9.6 (103,877,138 ns) | 223.6 (4,472,561 ns) | 223.7 (4,471,005 ns) | 257.8 (3,879,216 ns) | 270.3 (3,700,216 ns) | 28.1× |
+| **`FAESTVerify256f`** | 9.8 (101,848,166 ns) | 216.0 (4,628,742 ns) | 216.1 (4,628,347 ns) | 244.4 (4,092,364 ns) | 257.9 (3,877,479 ns) | 26.3× |
+| **`FAESTEM2Sign256f`** | 6.0 (166,382,436 ns) | 139.0 (7,192,466 ns) | 137.9 (7,250,257 ns) | 163.7 (6,109,838 ns) | 176.7 (5,659,507 ns) | 29.4× |
+| **`FAESTEM2Verify256f`** | 5.9 (168,220,966 ns) | 143.1 (6,986,787 ns) | 146.8 (6,813,240 ns) | 169.4 (5,903,627 ns) | 187.3 (5,339,351 ns) | 31.5× |
+| **`SLHDSASign128f`** | 5.3 (188,266,847 ns) | 256.5 (3,898,049 ns) | 256.8 (3,893,755 ns) | 258.4 (3,870,171 ns) | 259.3 (3,856,919 ns) | 48.8× |
+| **`SLHDSAVerify128f`** | 88.6 (11,286,195 ns) | 4,165.9 (240,045 ns) | 4,076.8 (245,290 ns) | 4,136.9 (241,724 ns) | 4,140.7 (241,507 ns) | 47.0× |
+| **`SLHDSASign256f`** | 3.1 (318,086,498 ns) | 143.5 (6,969,872 ns) | 145.2 (6,885,496 ns) | 166.0 (6,024,004 ns) | 158.9 (6,291,604 ns) | 52.8× |
+| **`SLHDSAVerify256f`** | 62.3 (16,063,318 ns) | 3,374.1 (296,372 ns) | 3,362.1 (297,432 ns) | 3,344.7 (298,979 ns) | 3,343.3 (299,103 ns) | 54.2× |
+| **`SLHDSATEMSign256f`** | 1.5 (656,406,122 ns) | 69.3 (14,420,642 ns) | 69.7 (14,344,520 ns) | 68.8 (14,530,767 ns) | 69.5 (14,383,040 ns) | 45.8× |
+| **`SLHDSATEMVerify256f`** | 53.7 (18,636,303 ns) | 2,421.0 (413,055 ns) | 2,442.8 (409,364 ns) | 2,414.4 (414,183 ns) | 2,447.2 (408,630 ns) | 45.6× |
 
-On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`240.2 us` (`4,163 ops/s`)** and `SLHDSAVerify256f` in **`293.4 us` (`3,408 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`1.99 ms` / `1.78 ms`**, `FAESTSign256f` / `FAESTVerify256f` in **`4.12 ms` / `3.79 ms`**, `KDFExpand` reaches **`2,194.8 MB/s`** (`1.64 c/B`), and `TEM2SIVEncrypt` reaches **`1,173.3 MB/s`** (`3.07 c/B`) on `avx512`.
+On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`240.0 us` (`4,166 ops/s`)** and `SLHDSAVerify256f` in **`296.4 us` (`3,374 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`1.64 ms` / `1.65 ms`**, `FAESTSign256f` / `FAESTVerify256f` in **`3.70 ms` / `3.88 ms`**, `KDFExpand` reaches **`2,165.2 MB/s`** (`1.66 c/B`), and `TEM2SIVEncrypt` reaches **`1,202.2 MB/s`** (`2.99 c/B`) on `avx512`.
 
 ### 2. AWS Graviton 4 (`c8g.4xlarge`, Neoverse-V2, 16 vCPUs, ARM64)
 
@@ -217,34 +217,34 @@ On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`240.2 us` (`4,1
 
 | Operation | `purego` | `arm64` | `c/B` (`arm64`) |
 | :--- | :---: | :---: | :---: |
-| **`GF128Mul` (16 B)** | 78.1 (205.03 ns) | 3,629.6 (4.41 ns) | 0.77 c/B |
-| **`GF128PolyMAC` (16 blocks, 256 B)** | 43.7 (5,858.33 ns) | 1,714.1 (149.37 ns) | 1.63 c/B |
-| **`ExtractWitness256` (288 B)** | 235.5 (1,223.00 ns) | 6,849.7 (42.05 ns) | 0.41 c/B |
-| **`VerifyWitness256` (288 B)** | 22.1 (13,008.33 ns) | 4,724.0 (60.97 ns) | 0.59 c/B |
-| **`ExtractWitnessEM2_256` (576 B)** | 232.2 (2,480.67 ns) | 5,640.4 (102.13 ns) | 0.50 c/B |
-| **`VerifyWitnessEM2_256` (576 B)** | 22.0 (26,151.67 ns) | 4,930.9 (116.83 ns) | 0.57 c/B |
-| **`KDFExpand` (1,024 B)** | 37.8 (27,061.33 ns) | 916.7 (1,117.00 ns) | 3.05 c/B |
-| **`TEM2SIVEncrypt` (4,096 B)** | 18.6 (220,848.00 ns) | 486.9 (8,412.00 ns) | 5.75 c/B |
-| **`TEM2SIVDecrypt` (4,096 B)** | 17.5 (234,712.67 ns) | 464.7 (8,815.00 ns) | 6.03 c/B |
+| **`GF128Mul` (16 B)** | 75.8 (211.13 ns) | 3,657.8 (4.37 ns) | 0.77 c/B |
+| **`GF128PolyMAC` (16 blocks, 256 B)** | 43.7 (5,855.67 ns) | 1,714.0 (149.33 ns) | 1.63 c/B |
+| **`ExtractWitness256` (288 B)** | 236.7 (1,217.00 ns) | 6,864.9 (41.95 ns) | 0.41 c/B |
+| **`VerifyWitness256` (288 B)** | 22.2 (12,960.67 ns) | 4,735.7 (60.82 ns) | 0.59 c/B |
+| **`ExtractWitnessEM2_256` (576 B)** | 235.6 (2,445.00 ns) | 7,484.0 (76.97 ns) | 0.37 c/B |
+| **`VerifyWitnessEM2_256` (576 B)** | 22.1 (26,063.00 ns) | 4,917.2 (117.13 ns) | 0.57 c/B |
+| **`KDFExpand` (1,024 B)** | 37.7 (27,178.67 ns) | 911.2 (1,124.00 ns) | 3.07 c/B |
+| **`TEM2SIVEncrypt` (4,096 B)** | 18.5 (221,643.67 ns) | 490.7 (8,348.00 ns) | 5.71 c/B |
+| **`TEM2SIVDecrypt` (4,096 B)** | 17.4 (235,578.00 ns) | 467.7 (8,757.00 ns) | 5.99 c/B |
 
 #### Post-Quantum Signatures: `FAEST-Areion` & `SLH-DSA-Areion` (ops/s, ns/op)
 
 | Operation | `purego` | `arm64` | Speedup vs `purego` |
 | :--- | :---: | :---: | :---: |
-| **`FAESTSign128f`** | 22.0 (45,484,264 ns) | 416.3 (2,402,238 ns) | 18.9× |
-| **`FAESTVerify128f`** | 22.5 (44,422,995 ns) | 452.6 (2,209,485 ns) | 20.1× |
-| **`FAESTSign256f`** | 9.6 (104,129,019 ns) | 200.1 (4,997,842 ns) | 20.8× |
-| **`FAESTVerify256f`** | 9.9 (101,383,682 ns) | 213.3 (4,689,264 ns) | 21.6× |
-| **`FAESTEM2Sign256f`** | 6.5 (154,596,059 ns) | 129.3 (7,735,456 ns) | 20.0× |
-| **`FAESTEM2Verify256f`** | 6.6 (151,214,712 ns) | 142.4 (7,022,158 ns) | 21.5× |
-| **`SLHDSASign128f`** | 5.3 (189,155,174 ns) | 150.1 (6,660,786 ns) | 28.4× |
-| **`SLHDSAVerify128f`** | 85.3 (11,724,587 ns) | 2,473.2 (404,326 ns) | 29.0× |
-| **`SLHDSASign256f`** | 3.1 (327,805,959 ns) | 98.6 (10,145,191 ns) | 32.3× |
-| **`SLHDSAVerify256f`** | 60.2 (16,606,963 ns) | 2,126.5 (470,262 ns) | 35.3× |
-| **`SLHDSATEMSign256f`** | 1.5 (664,837,126 ns) | 38.1 (26,276,924 ns) | 25.3× |
-| **`SLHDSATEMVerify256f`** | 51.6 (19,367,061 ns) | 1,334.9 (749,113 ns) | 25.9× |
+| **`FAESTSign128f`** | 24.0 (41,719,614 ns) | 490.4 (2,039,335 ns) | 20.5× |
+| **`FAESTVerify128f`** | 24.4 (41,046,465 ns) | 508.7 (1,965,670 ns) | 20.9× |
+| **`FAESTSign256f`** | 9.6 (104,172,061 ns) | 210.2 (4,758,377 ns) | 21.9× |
+| **`FAESTVerify256f`** | 9.8 (101,796,375 ns) | 217.6 (4,595,091 ns) | 22.2× |
+| **`FAESTEM2Sign256f`** | 6.1 (163,742,096 ns) | 134.9 (7,413,393 ns) | 22.1× |
+| **`FAESTEM2Verify256f`** | 6.2 (160,169,666 ns) | 143.0 (6,992,543 ns) | 22.9× |
+| **`SLHDSASign128f`** | 5.3 (188,773,229 ns) | 149.7 (6,678,451 ns) | 28.3× |
+| **`SLHDSAVerify128f`** | 85.3 (11,724,602 ns) | 2,474.8 (404,078 ns) | 29.0× |
+| **`SLHDSASign256f`** | 3.1 (326,740,950 ns) | 98.4 (10,167,592 ns) | 32.1× |
+| **`SLHDSAVerify256f`** | 60.2 (16,601,636 ns) | 2,127.1 (470,130 ns) | 35.3× |
+| **`SLHDSATEMSign256f`** | 1.5 (674,148,845 ns) | 38.1 (26,276,207 ns) | 25.7× |
+| **`SLHDSATEMVerify256f`** | 51.0 (19,622,539 ns) | 1,335.4 (748,859 ns) | 26.2× |
 
-On AWS Graviton 4 (`arm64`), `SLHDSAVerify128f` completes in **`404.3 us` (`2,473 ops/s`)** and `SLHDSAVerify256f` in **`470.3 us` (`2,127 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`2.40 ms` / `2.21 ms`** and `FAESTSign256f` / `FAESTVerify256f` in **`5.00 ms` / `4.69 ms`**.
+On AWS Graviton 4 (`arm64`), `SLHDSAVerify128f` completes in **`404.1 us` (`2,475 ops/s`)** and `SLHDSAVerify256f` in **`470.1 us` (`2,127 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`2.04 ms` / `1.97 ms`** and `FAESTSign256f` / `FAESTVerify256f` in **`4.76 ms` / `4.60 ms`**.
 
 ---
 
@@ -302,12 +302,12 @@ qemu-aarch64-static /tmp/areion_pq_arm64.test -test.v
 go test -run=^none -bench=. -benchmem ./...
 
 # Benchmark individual tiers:
-AREION_PQ_FORCE_TIER=purego go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=aesni go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=vex go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=vaesavx2 go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=avx512 go test -run=^none -bench=. -benchtime=100ms .
-AREION_PQ_FORCE_TIER=arm64 go test -run=^none -bench=. -benchtime=100ms .
+AREION_PQ_FORCE_TIER=purego go test -run=^none -bench=. -benchtime=500ms .
+AREION_PQ_FORCE_TIER=aesni go test -run=^none -bench=. -benchtime=500ms .
+AREION_PQ_FORCE_TIER=vex go test -run=^none -bench=. -benchtime=500ms .
+AREION_PQ_FORCE_TIER=vaesavx2 go test -run=^none -bench=. -benchtime=500ms .
+AREION_PQ_FORCE_TIER=avx512 go test -run=^none -bench=. -benchtime=500ms .
+AREION_PQ_FORCE_TIER=arm64 go test -run=^none -bench=. -benchtime=500ms .
 ```
 
 ### 4. Run Cryptanalytic & Algebraic Verification Suite

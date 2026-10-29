@@ -21,7 +21,7 @@ var raceEnabled = func() bool {
 }()
 
 func TestVersionAndConstants(t *testing.T) {
-	if Version != "0.1.0" || VersionMajor != 0 || VersionMinor != 1 || VersionPatch != 0 {
+	if Version != "0.1.1" || VersionMajor != 0 || VersionMinor != 1 || VersionPatch != 1 {
 		t.Fatalf("unexpected version %s (%d.%d.%d)", Version, VersionMajor, VersionMinor, VersionPatch)
 	}
 	if BlockSize != 16 || State256Size != 32 || State512Size != 64 {

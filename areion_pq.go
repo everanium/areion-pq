@@ -231,21 +231,13 @@ func VerifyWitness256P2(m, c, k1, k2 *[32]byte, w *[288]byte) bool {
 //go:noinline
 func extractWitnessEM2_256Body(c *[32]byte, w *[576]byte, m, k1, k2 *[32]byte) {
 	var zero32, uP1, k12 [32]byte
-	var wP1, wP2 [288]byte
 	xor32(&k12, k1, k2)
-	dispatchExtractWitness256(&uP1, &wP1, m, k1, &zero32, &roundConstantsP1)
-	dispatchExtractWitness256(c, &wP2, &uP1, k2, &k12, &roundConstantsP2)
-	copy(w[0:288], wP1[:])
-	copy(w[288:576], wP2[:])
-
+	dispatchExtractWitness256(&uP1, (*[288]byte)(w[0:288]), m, k1, &zero32, &roundConstantsP1)
+	dispatchExtractWitness256(c, (*[288]byte)(w[288:576]), &uP1, k2, &k12, &roundConstantsP2)
 	clear(uP1[:])
-	clear(wP1[:])
 	clear(k12[:])
-	clear(wP2[:])
 	runtime.KeepAlive(&uP1)
-	runtime.KeepAlive(&wP1)
 	runtime.KeepAlive(&k12)
-	runtime.KeepAlive(&wP2)
 }
 
 // ExtractWitnessEM2_256 computes C = P2(P1(M ⊕ K1) ⊕ K2) ⊕ K1 ⊕ K2 and extracts
@@ -577,20 +569,20 @@ func tem2SIVEncryptInPlaceBody(tagOut *[32]byte, key *[128]byte, nonce *[32]byte
 	kEnc := *key
 	kEnc[0] ^= 0x5A
 	var keys4 [4][128]byte
+	var tweaks4, msgs4, ct4 [4][64]byte
 	for lane := 0; lane < 4; lane++ {
 		keys4[lane] = kEnc
+		copy(tweaks4[lane][0:32], tag[:])
+		copy(tweaks4[lane][32:48], nonce[0:16])
+		binary.LittleEndian.PutUint64(tweaks4[lane][56:64], 0x54454D3253495601)
 	}
-	var tweaks4, msgs4, ct4 [4][64]byte
 	var tweak, msg, ct [64]byte
 
 	blkIdx := uint64(0)
 	off := 0
 	for off+256 <= len(plaintext) {
 		for lane := 0; lane < 4; lane++ {
-			copy(tweaks4[lane][0:32], tag[:])
-			copy(tweaks4[lane][32:48], nonce[0:16])
 			binary.LittleEndian.PutUint64(tweaks4[lane][48:56], blkIdx+uint64(lane))
-			binary.LittleEndian.PutUint64(tweaks4[lane][56:64], 0x54454D3253495601)
 			copy(msgs4[lane][:], plaintext[off+64*lane:off+64*(lane+1)])
 		}
 		ct4 = areion.TEM2Encrypt512x4(&keys4, &tweaks4, &msgs4)
@@ -661,20 +653,20 @@ func tem2SIVDecryptInPlaceBody(key *[128]byte, nonce *[32]byte, ad, dst, ciphert
 	kEnc := *key
 	kEnc[0] ^= 0x5A
 	var keys4 [4][128]byte
+	var tweaks4, cts4, pt4 [4][64]byte
 	for lane := 0; lane < 4; lane++ {
 		keys4[lane] = kEnc
+		copy(tweaks4[lane][0:32], tag[:])
+		copy(tweaks4[lane][32:48], nonce[0:16])
+		binary.LittleEndian.PutUint64(tweaks4[lane][56:64], 0x54454D3253495601)
 	}
-	var tweaks4, cts4, pt4 [4][64]byte
 	var tweak, ct, pt [64]byte
 
 	blkIdx := uint64(0)
 	off := 0
 	for off+256 <= len(ciphertext) {
 		for lane := 0; lane < 4; lane++ {
-			copy(tweaks4[lane][0:32], tag[:])
-			copy(tweaks4[lane][32:48], nonce[0:16])
 			binary.LittleEndian.PutUint64(tweaks4[lane][48:56], blkIdx+uint64(lane))
-			binary.LittleEndian.PutUint64(tweaks4[lane][56:64], 0x54454D3253495601)
 			copy(cts4[lane][:], ciphertext[off+64*lane:off+64*(lane+1)])
 		}
 		pt4 = areion.TEM2Decrypt512x4(&keys4, &tweaks4, &cts4)
@@ -2247,42 +2239,37 @@ func faestExpandLeaf(lambda, lExt int, salt *[32]byte, t, j int, sLeaf []byte, r
 		totalBytes += lambda
 	}
 	numBlks := (totalBytes + 31) / 32
-	var buf [22 * 32]byte
-
-	var keys4 [4][64]byte
-	for lane := 0; lane < 4; lane++ {
-		keys4[lane] = kLeaf
-	}
-	var in4, out4 [4][32]byte
-	var in32, out32 [32]byte
-
-	blk := 0
-	if rowOut == nil {
-		blk = lExt / 32
-	}
-	for ; blk+4 <= numBlks; blk += 4 {
-		for lane := 0; lane < 4; lane++ {
-			binary.LittleEndian.PutUint64(in4[lane][0:8], uint64(t))
-			binary.LittleEndian.PutUint64(in4[lane][8:16], uint64(j))
-			binary.LittleEndian.PutUint64(in4[lane][16:24], uint64(blk+lane))
-			binary.LittleEndian.PutUint64(in4[lane][24:32], 0x564F4C454C454146)
-		}
-		out4 = areion.SoEM256x4(&keys4, &in4)
-		for lane := 0; lane < 4; lane++ {
-			copy(buf[32*(blk+lane):32*(blk+lane+1)], out4[lane][:])
-		}
-	}
-	for ; blk < numBlks; blk++ {
-		binary.LittleEndian.PutUint64(in32[0:8], uint64(t))
-		binary.LittleEndian.PutUint64(in32[8:16], uint64(j))
-		binary.LittleEndian.PutUint64(in32[16:24], uint64(blk))
-		binary.LittleEndian.PutUint64(in32[24:32], 0x564F4C454C454146)
-		out32 = areion.SoEM256(&kLeaf, &in32)
-		copy(buf[32*blk:32*(blk+1)], out32[:])
-	}
+	var buf [24 * 32]byte
 
 	if rowOut != nil {
+		var keys4 [4][64]byte
+		var in4, out4 [4][32]byte
+		for lane := 0; lane < 4; lane++ {
+			keys4[lane] = kLeaf
+			binary.LittleEndian.PutUint64(in4[lane][0:8], uint64(t))
+			binary.LittleEndian.PutUint64(in4[lane][8:16], uint64(j))
+			binary.LittleEndian.PutUint64(in4[lane][24:32], 0x564F4C454C454146)
+		}
+		for blk := 0; blk < numBlks; blk += 4 {
+			for lane := 0; lane < 4; lane++ {
+				binary.LittleEndian.PutUint64(in4[lane][16:24], uint64(blk+lane))
+			}
+			out4 = areion.SoEM256x4(&keys4, &in4)
+			for lane := 0; lane < 4; lane++ {
+				copy(buf[32*(blk+lane):32*(blk+lane+1)], out4[lane][:])
+			}
+		}
 		copy(rowOut[0:lExt], buf[0:lExt])
+	} else {
+		var in32, out32 [32]byte
+		for blk := lExt / 32; blk < numBlks; blk++ {
+			binary.LittleEndian.PutUint64(in32[0:8], uint64(t))
+			binary.LittleEndian.PutUint64(in32[8:16], uint64(j))
+			binary.LittleEndian.PutUint64(in32[16:24], uint64(blk))
+			binary.LittleEndian.PutUint64(in32[24:32], 0x564F4C454C454146)
+			out32 = areion.SoEM256(&kLeaf, &in32)
+			copy(buf[32*blk:32*(blk+1)], out32[:])
+		}
 	}
 	if comOut != nil {
 		copy(comOut[0:lambda], buf[lExt:lExt+lambda])
@@ -2442,18 +2429,39 @@ func qsReduceGF256Tags(p *[8][16]byte, d *[15][16]byte) {
 	// z^12 = 0xAB (bits 0, 1, 3, 5, 7)
 	// z^13 = 0x4D (bits 0, 2, 3, 6)
 	// z^14 = 0x9A (bits 1, 3, 4, 7)
-	var modMask = [7]byte{0x1B, 0x36, 0x6C, 0xD8, 0xAB, 0x4D, 0x9A}
-	for i := 0; i < 8; i++ {
-		p[i] = d[i]
-	}
-	for k := 0; k < 7; k++ {
-		m := modMask[k]
-		for b := 0; b < 8; b++ {
-			if ((m >> b) & 1) != 0 {
-				xor16(&p[b], &p[b], &d[8+k])
-			}
-		}
-	}
+	d8Lo := binary.LittleEndian.Uint64(d[8][0:8])
+	d9Lo := binary.LittleEndian.Uint64(d[9][0:8])
+	d10Lo := binary.LittleEndian.Uint64(d[10][0:8])
+	d11Lo := binary.LittleEndian.Uint64(d[11][0:8])
+	d12Lo := binary.LittleEndian.Uint64(d[12][0:8])
+	d13Lo := binary.LittleEndian.Uint64(d[13][0:8])
+	d14Lo := binary.LittleEndian.Uint64(d[14][0:8])
+
+	binary.LittleEndian.PutUint64(p[0][0:8], binary.LittleEndian.Uint64(d[0][0:8])^d8Lo^d12Lo^d13Lo)
+	binary.LittleEndian.PutUint64(p[1][0:8], binary.LittleEndian.Uint64(d[1][0:8])^d8Lo^d9Lo^d12Lo^d14Lo)
+	binary.LittleEndian.PutUint64(p[2][0:8], binary.LittleEndian.Uint64(d[2][0:8])^d9Lo^d10Lo^d13Lo)
+	binary.LittleEndian.PutUint64(p[3][0:8], binary.LittleEndian.Uint64(d[3][0:8])^d8Lo^d10Lo^d11Lo^d12Lo^d13Lo^d14Lo)
+	binary.LittleEndian.PutUint64(p[4][0:8], binary.LittleEndian.Uint64(d[4][0:8])^d8Lo^d9Lo^d11Lo^d14Lo)
+	binary.LittleEndian.PutUint64(p[5][0:8], binary.LittleEndian.Uint64(d[5][0:8])^d9Lo^d10Lo^d12Lo)
+	binary.LittleEndian.PutUint64(p[6][0:8], binary.LittleEndian.Uint64(d[6][0:8])^d10Lo^d11Lo^d13Lo)
+	binary.LittleEndian.PutUint64(p[7][0:8], binary.LittleEndian.Uint64(d[7][0:8])^d11Lo^d12Lo^d14Lo)
+
+	d8Hi := binary.LittleEndian.Uint64(d[8][8:16])
+	d9Hi := binary.LittleEndian.Uint64(d[9][8:16])
+	d10Hi := binary.LittleEndian.Uint64(d[10][8:16])
+	d11Hi := binary.LittleEndian.Uint64(d[11][8:16])
+	d12Hi := binary.LittleEndian.Uint64(d[12][8:16])
+	d13Hi := binary.LittleEndian.Uint64(d[13][8:16])
+	d14Hi := binary.LittleEndian.Uint64(d[14][8:16])
+
+	binary.LittleEndian.PutUint64(p[0][8:16], binary.LittleEndian.Uint64(d[0][8:16])^d8Hi^d12Hi^d13Hi)
+	binary.LittleEndian.PutUint64(p[1][8:16], binary.LittleEndian.Uint64(d[1][8:16])^d8Hi^d9Hi^d12Hi^d14Hi)
+	binary.LittleEndian.PutUint64(p[2][8:16], binary.LittleEndian.Uint64(d[2][8:16])^d9Hi^d10Hi^d13Hi)
+	binary.LittleEndian.PutUint64(p[3][8:16], binary.LittleEndian.Uint64(d[3][8:16])^d8Hi^d10Hi^d11Hi^d12Hi^d13Hi^d14Hi)
+	binary.LittleEndian.PutUint64(p[4][8:16], binary.LittleEndian.Uint64(d[4][8:16])^d8Hi^d9Hi^d11Hi^d14Hi)
+	binary.LittleEndian.PutUint64(p[5][8:16], binary.LittleEndian.Uint64(d[5][8:16])^d9Hi^d10Hi^d12Hi)
+	binary.LittleEndian.PutUint64(p[6][8:16], binary.LittleEndian.Uint64(d[6][8:16])^d10Hi^d11Hi^d13Hi)
+	binary.LittleEndian.PutUint64(p[7][8:16], binary.LittleEndian.Uint64(d[7][8:16])^d11Hi^d12Hi^d14Hi)
 }
 
 func qsMul2(d *[3][16]byte, a, b *[2][16]byte) {
@@ -2531,13 +2539,26 @@ func qsEvalBilinearConstraint(a, b, c *qsByteWire, isVerifier bool, delta, chi, 
 	qsMul8(&d0, &a.tag, &b.tag)
 	qsReduceGF256Tags(&p0, &d0)
 	if !isVerifier {
+		var d1Lo, d1Hi [15]uint64
+		var bMask, bLo, bHi [8]uint64
+		for j := 0; j < 8; j++ {
+			bMask[j] = -uint64((b.val >> j) & 1)
+			bLo[j] = binary.LittleEndian.Uint64(b.tag[j][0:8])
+			bHi[j] = binary.LittleEndian.Uint64(b.tag[j][8:16])
+		}
 		for i := 0; i < 8; i++ {
 			aiMask := -uint64((a.val >> i) & 1)
+			aiLo := binary.LittleEndian.Uint64(a.tag[i][0:8])
+			aiHi := binary.LittleEndian.Uint64(a.tag[i][8:16])
 			for j := 0; j < 8; j++ {
-				bjMask := -uint64((b.val >> j) & 1)
-				xor16Masked(&d1[i+j], &b.tag[j], aiMask)
-				xor16Masked(&d1[i+j], &a.tag[i], bjMask)
+				bjMask := bMask[j]
+				d1Lo[i+j] ^= (bLo[j] & aiMask) ^ (aiLo & bjMask)
+				d1Hi[i+j] ^= (bHi[j] & aiMask) ^ (aiHi & bjMask)
 			}
+		}
+		for k := 0; k < 15; k++ {
+			binary.LittleEndian.PutUint64(d1[k][0:8], d1Lo[k])
+			binary.LittleEndian.PutUint64(d1[k][8:16], d1Hi[k])
 		}
 		qsReduceGF256Tags(&p1, &d1)
 		for m := 0; m < 8; m++ {
@@ -2596,6 +2617,17 @@ func qsMulOrtho128Wires(out *[16]qsByteWire, tHalf *[16]byte, kWires *[16]qsByte
 	}
 }
 
+func qsWireFromWitnessByte(w *qsByteWire, byteOffset int, wFull []byte, bitTags [][16]byte, isVerifier bool) {
+	if !isVerifier {
+		w.val = wFull[byteOffset]
+	} else {
+		w.val = 0
+	}
+	for b := 0; b < 8; b++ {
+		w.tag[b] = bitTags[8*byteOffset+b]
+	}
+}
+
 func faestEvalQuickSilverLane(
 	p *faestParams,
 	mPub, tPub, cPub *[32]byte,
@@ -2604,26 +2636,15 @@ func faestEvalQuickSilverLane(
 	isVerifier bool,
 	deltaLane, chi *[16]byte,
 ) (a1Acc, a0OrBVAcc [16]byte) {
-	wireFromWitnessByte := func(w *qsByteWire, byteOffset int) {
-		if !isVerifier {
-			w.val = wFull[byteOffset]
-		} else {
-			w.val = 0
-		}
-		for b := 0; b < 8; b++ {
-			w.tag[b] = bitTags[8*byteOffset+b]
-		}
-	}
-
 	var k1Wires, k2Wires [32]qsByteWire
 	if p.kBytes == 16 {
 		for i := 0; i < 16; i++ {
-			wireFromWitnessByte(&k1Wires[i], i)
+			qsWireFromWitnessByte(&k1Wires[i], i, wFull, bitTags, isVerifier)
 			k1Wires[16+i] = k1Wires[i]
 		}
 	} else {
 		for i := 0; i < 32; i++ {
-			wireFromWitnessByte(&k1Wires[i], i)
+			qsWireFromWitnessByte(&k1Wires[i], i, wFull, bitTags, isVerifier)
 		}
 	}
 
@@ -2649,19 +2670,20 @@ func faestEvalQuickSilverLane(
 		p1Rounds = 9
 	}
 
-	var a, b, aNext, bNext, s1, mc, x2, t, imc, s2 [16]qsByteWire
+	var a, b *[16]qsByteWire
+	var aNext, bNext, s1, mc, x2, t, imc, s2 [16]qsByteWire
 
 	for r := 0; r < p1Rounds; r++ {
 		if r%2 == 0 {
-			a, b = x0, x1
+			a, b = &x0, &x1
 		} else {
-			a, b = x1, x0
+			a, b = &x1, &x0
 		}
 		if r < 9 {
 			base := p.kBytes + 32*r
 			for i := 0; i < 16; i++ {
-				wireFromWitnessByte(&aNext[i], base+i)
-				wireFromWitnessByte(&bNext[i], base+16+i)
+				qsWireFromWitnessByte(&aNext[i], base+i, wFull, bitTags, isVerifier)
+				qsWireFromWitnessByte(&bNext[i], base+16+i, wFull, bitTags, isVerifier)
 			}
 		} else {
 			for i := 0; i < 16; i++ {
@@ -2686,32 +2708,29 @@ func faestEvalQuickSilverLane(
 			qsEvalSBoxGate(&x2[j], &s2[j], isVerifier, deltaLane, chi, &a1Acc, &a0OrBVAcc)
 		}
 
-		if r%2 == 0 {
-			x0, x1 = aNext, bNext
-		} else {
-			x1, x0 = aNext, bNext
-		}
+		*a = aNext
+		*b = bNext
 	}
 
 	if p.isEM2 {
 		// Evaluate P2 rounds 1..9 from w_p2[0:288] and final state C ^ K1 ^ K2
 		baseP2 := p.kBytes + 288
 		for i := 0; i < 16; i++ {
-			wireFromWitnessByte(&x0[i], baseP2+i)
-			wireFromWitnessByte(&x1[i], baseP2+16+i)
+			qsWireFromWitnessByte(&x0[i], baseP2+i, wFull, bitTags, isVerifier)
+			qsWireFromWitnessByte(&x1[i], baseP2+16+i, wFull, bitTags, isVerifier)
 		}
 		var k12Hi, k12Lo qsByteWire
 		for r := 1; r < 10; r++ {
 			if r%2 == 0 {
-				a, b = x0, x1
+				a, b = &x0, &x1
 			} else {
-				a, b = x1, x0
+				a, b = &x1, &x0
 			}
 			if r < 9 {
 				base := baseP2 + 32*r
 				for i := 0; i < 16; i++ {
-					wireFromWitnessByte(&aNext[i], base+i)
-					wireFromWitnessByte(&bNext[i], base+16+i)
+					qsWireFromWitnessByte(&aNext[i], base+i, wFull, bitTags, isVerifier)
+					qsWireFromWitnessByte(&bNext[i], base+16+i, wFull, bitTags, isVerifier)
 				}
 			} else {
 				for i := 0; i < 16; i++ {
@@ -2738,11 +2757,8 @@ func faestEvalQuickSilverLane(
 				qsEvalSBoxGate(&x2[j], &s2[j], isVerifier, deltaLane, chi, &a1Acc, &a0OrBVAcc)
 			}
 
-			if r%2 == 0 {
-				x0, x1 = aNext, bNext
-			} else {
-				x1, x0 = aNext, bNext
-			}
+			*a = aNext
+			*b = bNext
 		}
 	}
 
@@ -2788,28 +2804,20 @@ func faestSignCoreBody(p *faestParams, sk, msg, optRand, sigOut []byte) {
 	copy(wFull[0:p.kBytes], sk[0:p.kBytes])
 	if !p.isEM2 {
 		var k2, cDummy [32]byte
-		var w288 [288]byte
 		mulOrtho256Body(&k2, &tPub, &k32)
-		dispatchExtractWitness256(&cDummy, &w288, &mPub, &k32, &k2, &roundConstantsP1)
-		copy(wFull[p.kBytes:p.lBytes], w288[:])
+		dispatchExtractWitness256(&cDummy, (*[288]byte)(wFull[p.kBytes:p.lBytes]), &mPub, &k32, &k2, &roundConstantsP1)
 		clear(k2[:])
 		clear(cDummy[:])
-		clear(w288[:])
 		runtime.KeepAlive(&k2)
 		runtime.KeepAlive(&cDummy)
-		runtime.KeepAlive(&w288)
 	} else {
 		var k2, cDummy [32]byte
-		var w576 [576]byte
 		orthoSigma256Body(&k2, &k32)
-		extractWitnessEM2_256Body(&cDummy, &w576, &mPub, &k32, &k2)
-		copy(wFull[p.kBytes:p.lBytes], w576[:])
+		extractWitnessEM2_256Body(&cDummy, (*[576]byte)(wFull[p.kBytes:p.lBytes]), &mPub, &k32, &k2)
 		clear(k2[:])
 		clear(cDummy[:])
-		clear(w576[:])
 		runtime.KeepAlive(&k2)
 		runtime.KeepAlive(&cDummy)
-		runtime.KeepAlive(&w576)
 	}
 
 	// Derive salt (32 B) and tau tree root seeds
@@ -2940,14 +2948,15 @@ func faestSignCoreBody(p *faestParams, sk, msg, optRand, sigOut []byte) {
 			for byteIdx := 0; byteIdx < p.lExt; byteIdx++ {
 				rb := row[byteIdx]
 				baseBit := 8 * byteIdx
-				bitTags[baseBit+0][kByte] |= ((rb >> 0) & 1) << kShift
-				bitTags[baseBit+1][kByte] |= ((rb >> 1) & 1) << kShift
-				bitTags[baseBit+2][kByte] |= ((rb >> 2) & 1) << kShift
-				bitTags[baseBit+3][kByte] |= ((rb >> 3) & 1) << kShift
-				bitTags[baseBit+4][kByte] |= ((rb >> 4) & 1) << kShift
-				bitTags[baseBit+5][kByte] |= ((rb >> 5) & 1) << kShift
-				bitTags[baseBit+6][kByte] |= ((rb >> 6) & 1) << kShift
-				bitTags[baseBit+7][kByte] |= ((rb >> 7) & 1) << kShift
+				tags := bitTags[baseBit : baseBit+8 : baseBit+8]
+				tags[0][kByte] |= ((rb >> 0) & 1) << kShift
+				tags[1][kByte] |= ((rb >> 1) & 1) << kShift
+				tags[2][kByte] |= ((rb >> 2) & 1) << kShift
+				tags[3][kByte] |= ((rb >> 3) & 1) << kShift
+				tags[4][kByte] |= ((rb >> 4) & 1) << kShift
+				tags[5][kByte] |= ((rb >> 5) & 1) << kShift
+				tags[6][kByte] |= ((rb >> 6) & 1) << kShift
+				tags[7][kByte] |= ((rb >> 7) & 1) << kShift
 			}
 		}
 		a1Acc, a0Acc := faestEvalQuickSilverLane(p, &mPub, &tPub, &cPub, wFull[0:p.lBytes], bitTags, false, &zeroDelta, &chi)
@@ -3240,14 +3249,15 @@ func faestVerifyCoreBody(p *faestParams, pk, msg, sig []byte) bool {
 			for byteIdx := 0; byteIdx < p.lExt; byteIdx++ {
 				rb := row[byteIdx]
 				baseBit := 8 * byteIdx
-				bitTags[baseBit+0][kByte] |= ((rb >> 0) & 1) << kShift
-				bitTags[baseBit+1][kByte] |= ((rb >> 1) & 1) << kShift
-				bitTags[baseBit+2][kByte] |= ((rb >> 2) & 1) << kShift
-				bitTags[baseBit+3][kByte] |= ((rb >> 3) & 1) << kShift
-				bitTags[baseBit+4][kByte] |= ((rb >> 4) & 1) << kShift
-				bitTags[baseBit+5][kByte] |= ((rb >> 5) & 1) << kShift
-				bitTags[baseBit+6][kByte] |= ((rb >> 6) & 1) << kShift
-				bitTags[baseBit+7][kByte] |= ((rb >> 7) & 1) << kShift
+				tags := bitTags[baseBit : baseBit+8 : baseBit+8]
+				tags[0][kByte] |= ((rb >> 0) & 1) << kShift
+				tags[1][kByte] |= ((rb >> 1) & 1) << kShift
+				tags[2][kByte] |= ((rb >> 2) & 1) << kShift
+				tags[3][kByte] |= ((rb >> 3) & 1) << kShift
+				tags[4][kByte] |= ((rb >> 4) & 1) << kShift
+				tags[5][kByte] |= ((rb >> 5) & 1) << kShift
+				tags[6][kByte] |= ((rb >> 6) & 1) << kShift
+				tags[7][kByte] |= ((rb >> 7) & 1) << kShift
 			}
 		}
 		var deltaLane [16]byte

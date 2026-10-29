@@ -253,10 +253,6 @@ func bsMixColumns(q *bsState) {
 	q[5] = a[4] ^ b[5]
 	q[6] = a[5] ^ b[6]
 	q[7] = a[6] ^ b[7]
-	clear(a[:])
-	clear(b[:])
-	runtime.KeepAlive(&a)
-	runtime.KeepAlive(&b)
 }
 
 func bsInvMixColumns(q *bsState) {
@@ -288,12 +284,6 @@ func bsInvMixColumns(q *bsState) {
 	q[5] ^= u[5] ^ f[4]
 	q[6] ^= u[6] ^ f[5]
 	q[7] ^= u[7] ^ f[6]
-	clear(d[:])
-	clear(u[:])
-	clear(f[:])
-	runtime.KeepAlive(&d)
-	runtime.KeepAlive(&u)
-	runtime.KeepAlive(&f)
 }
 
 func xor16(dst, a, b *[16]byte) {
@@ -322,8 +312,6 @@ func softInvShiftRows(dst, in *[16]byte) {
 	bsPack1(&q, in)
 	bsInvShiftRows(&q)
 	bsUnpack1(&q, dst)
-	clear(q[:])
-	runtime.KeepAlive(&q)
 }
 
 func softMixColumns(dst, in *[16]byte) {
@@ -331,8 +319,6 @@ func softMixColumns(dst, in *[16]byte) {
 	bsPack1(&q, in)
 	bsMixColumns(&q)
 	bsUnpack1(&q, dst)
-	clear(q[:])
-	runtime.KeepAlive(&q)
 }
 
 func softInvMixColumns(dst, in *[16]byte) {
@@ -340,8 +326,6 @@ func softInvMixColumns(dst, in *[16]byte) {
 	bsPack1(&q, in)
 	bsInvMixColumns(&q)
 	bsUnpack1(&q, dst)
-	clear(q[:])
-	runtime.KeepAlive(&q)
 }
 
 //go:noinline
@@ -393,21 +377,6 @@ func extractWitness256SoftwareBody(c *[32]byte, w *[288]byte, m, k1, k2 *[32]byt
 		c[i] = x0[i] ^ k2[i]
 		c[16+i] = x1[i] ^ k2[16+i]
 	}
-
-	clear(x0[:])
-	clear(x1[:])
-	clear(aNext[:])
-	clear(u[:])
-	clear(bNext[:])
-	clear(q[:])
-	clear(qRC[:])
-	runtime.KeepAlive(&x0)
-	runtime.KeepAlive(&x1)
-	runtime.KeepAlive(&aNext)
-	runtime.KeepAlive(&u)
-	runtime.KeepAlive(&bNext)
-	runtime.KeepAlive(&q)
-	runtime.KeepAlive(&qRC)
 }
 
 // extractWitness256Software extracts the 32-byte ciphertext c and 288-byte
@@ -490,33 +459,6 @@ func verifyWitness256SoftwareBody(m, c, k1, k2 *[32]byte, w *[288]byte, rc *[10]
 			x1, x0 = aNext, bNext
 		}
 	}
-
-	clear(x0[:])
-	clear(x1[:])
-	clear(a[:])
-	clear(b[:])
-	clear(aNext[:])
-	clear(bNext[:])
-	clear(t[:])
-	clear(xLayer1[:])
-	clear(sLayer1[:])
-	clear(xLayer2[:])
-	clear(sLayer2[:])
-	clear(tmpMC[:])
-	clear(tmpIMC[:])
-	runtime.KeepAlive(&x0)
-	runtime.KeepAlive(&x1)
-	runtime.KeepAlive(&a)
-	runtime.KeepAlive(&b)
-	runtime.KeepAlive(&aNext)
-	runtime.KeepAlive(&bNext)
-	runtime.KeepAlive(&t)
-	runtime.KeepAlive(&xLayer1)
-	runtime.KeepAlive(&sLayer1)
-	runtime.KeepAlive(&xLayer2)
-	runtime.KeepAlive(&sLayer2)
-	runtime.KeepAlive(&tmpMC)
-	runtime.KeepAlive(&tmpIMC)
 
 	return subtle.ConstantTimeByteEq(diff, 0) == 1
 }
@@ -602,14 +544,6 @@ func gf128PolyMACSoftwareBody(acc *[16]byte, a, b []byte, chi *[16]byte) {
 		xor16(&cur, &cur, &prod)
 	}
 	*acc = cur
-	clear(ai[:])
-	clear(bi[:])
-	clear(prod[:])
-	clear(cur[:])
-	runtime.KeepAlive(&ai)
-	runtime.KeepAlive(&bi)
-	runtime.KeepAlive(&prod)
-	runtime.KeepAlive(&cur)
 }
 
 func gf128PolyMACSoftware(acc *[16]byte, a, b []byte, chi *[16]byte) {
@@ -632,10 +566,6 @@ func gf128PolyMACBlocksSoftwareBody(acc *[16]byte, a, b [][16]byte, chi *[16]byt
 		xor16(&cur, &cur, &prod)
 	}
 	*acc = cur
-	clear(prod[:])
-	clear(cur[:])
-	runtime.KeepAlive(&prod)
-	runtime.KeepAlive(&cur)
 }
 
 func gf128PolyMACBlocksSoftware(acc *[16]byte, a, b [][16]byte, chi *[16]byte) {
@@ -671,8 +601,6 @@ func slhWOTSChain256x4SoftwareBody(out *[4][32]byte, in *[4][32]byte, adrs *[4][
 	cur := *in
 	if steps <= 0 {
 		*out = cur
-		clear(cur[:])
-		runtime.KeepAlive(&cur)
 		return
 	}
 	var b512, p512 [4][64]byte
@@ -717,12 +645,6 @@ func slhWOTSChain256x4SoftwareBody(out *[4][32]byte, in *[4][32]byte, adrs *[4][
 	}
 
 	*out = cur
-	clear(cur[:])
-	clear(b512[:])
-	clear(p512[:])
-	runtime.KeepAlive(&cur)
-	runtime.KeepAlive(&b512)
-	runtime.KeepAlive(&p512)
 }
 
 func slhWOTSChain256x4Software(out *[4][32]byte, in *[4][32]byte, adrs *[4][32]byte, kpub1, kpub2 *[32]byte, startStep, steps int) {

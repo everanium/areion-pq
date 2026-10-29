@@ -423,6 +423,8 @@ TEXT ·dumpSIMDRegs(SB), NOSPLIT, $0-9
 	MOVD ZR, R23
 	MOVD ZR, R24
 	MOVD ZR, R25
+	MOVD ZR, R26
+	MOVD ZR, R27
 	RET
 
 // func clobberScratchGPRs()

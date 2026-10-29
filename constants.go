@@ -1,10 +1,10 @@
 package areionpq
 
 const (
-	Version      = "0.1.0"
+	Version      = "0.1.1"
 	VersionMajor = 0
 	VersionMinor = 1
-	VersionPatch = 0
+	VersionPatch = 1
 
 	// Finite-field & witness sizes
 	BlockSize          = 16
