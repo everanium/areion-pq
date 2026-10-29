@@ -96,9 +96,102 @@ func TestTierControlAndSelfTest(t *testing.T) {
 	if err := SetTierCode(TierPureGo); err != nil || TierCode() != TierPureGo {
 		t.Fatalf("SetTierCode(TierPureGo) failed: %v", err)
 	}
+	if UseHardwareAcceleration() {
+		t.Fatal("UseHardwareAcceleration() should be false in purego tier")
+	}
 	if err := SetTierCode(TierAuto); err != nil {
 		t.Fatalf("SetTierCode(TierAuto) failed: %v", err)
 	}
+	if (hasAESNI || hasARMCrypto) && !UseHardwareAcceleration() {
+		t.Fatal("UseHardwareAcceleration() should be true when hardware tier is active")
+	}
+
+	// Test SetTierCode for all valid TierIDs (0..6) and simulated capability states.
+	origAESNI, origVEX, origARM, origVAES, origAVX512 := hasAESNI, hasVEX, hasARMCrypto, hasVAESAVX2, hasAVX512
+	restoreCaps := func() {
+		hasAESNI, hasVEX, hasARMCrypto, hasVAESAVX2, hasAVX512 = origAESNI, origVEX, origARM, origVAES, origAVX512
+		_ = SetTier(orig)
+	}
+	defer restoreCaps()
+
+	hasAESNI, hasVEX, hasARMCrypto, hasVAESAVX2, hasAVX512 = false, false, false, false, false
+	if err := SetTierCode(TierAuto); err != nil || Tier() != "purego" {
+		t.Fatalf("auto with no caps: got %s, err=%v", Tier(), err)
+	}
+	for _, id := range []TierID{TierAESNI, TierVEX, TierVAESAVX2, TierAVX512, TierARM64} {
+		if err := SetTierCode(id); err == nil {
+			t.Fatalf("expected error for TierID %d when capability is disabled", id)
+		}
+	}
+
+	hasARMCrypto = true
+	if err := SetTierCode(TierAuto); err != nil || Tier() != "arm64" {
+		t.Fatalf("auto with arm64: got %s, err=%v", Tier(), err)
+	}
+	if err := SetTierCode(TierARM64); err != nil || Tier() != "arm64" {
+		t.Fatalf("SetTierCode(TierARM64): got %s, err=%v", Tier(), err)
+	}
+	_ = AvailableTiers()
+
+	hasAESNI = true
+	if err := SetTierCode(TierAuto); err != nil || Tier() != "aesni" {
+		t.Fatalf("auto with aesni: got %s, err=%v", Tier(), err)
+	}
+	if err := SetTierCode(TierAESNI); err != nil || Tier() != "aesni" {
+		t.Fatalf("SetTierCode(TierAESNI): got %s, err=%v", Tier(), err)
+	}
+
+	hasVEX = true
+	if err := SetTierCode(TierAuto); err != nil || Tier() != "vex" {
+		t.Fatalf("auto with vex: got %s, err=%v", Tier(), err)
+	}
+	if err := SetTierCode(TierVEX); err != nil || Tier() != "vex" {
+		t.Fatalf("SetTierCode(TierVEX): got %s, err=%v", Tier(), err)
+	}
+
+	hasVAESAVX2 = true
+	if err := SetTierCode(TierAuto); err != nil || Tier() != "vaesavx2" {
+		t.Fatalf("auto with vaesavx2: got %s, err=%v", Tier(), err)
+	}
+	if err := SetTierCode(TierVAESAVX2); err != nil || Tier() != "vaesavx2" {
+		t.Fatalf("SetTierCode(TierVAESAVX2): got %s, err=%v", Tier(), err)
+	}
+
+	hasAVX512 = true
+	if err := SetTierCode(TierAuto); err != nil || Tier() != "avx512" {
+		t.Fatalf("auto with avx512: got %s, err=%v", Tier(), err)
+	}
+	if err := SetTierCode(TierAVX512); err != nil || Tier() != "avx512" {
+		t.Fatalf("SetTierCode(TierAVX512): got %s, err=%v", Tier(), err)
+	}
+	_ = AvailableTiers()
+	restoreCaps()
+
+	// Test applyEnvTier via environment variables.
+	t.Setenv("AREION_PQ_FORCE_TIER", "purego")
+	applyEnvTier()
+	if Tier() != "purego" {
+		t.Fatalf("applyEnvTier purego failed: got %s", Tier())
+	}
+	if hasAESNI {
+		t.Setenv("AREION_PQ_FORCE_TIER", "aesni")
+		applyEnvTier()
+		if Tier() != "aesni" {
+			t.Fatalf("applyEnvTier aesni failed: got %s", Tier())
+		}
+	}
+	t.Setenv("AREION_PQ_FORCE_TIER", "auto")
+	applyEnvTier()
+	t.Setenv("AREION_PQ_FORCE_TIER", "invalid-tier-name")
+	applyEnvTier()
+	t.Setenv("AREION_PQ_FORCE_TIER", "")
+	t.Setenv("AREION_FORCE_TIER", "purego")
+	applyEnvTier()
+	if Tier() != "purego" {
+		t.Fatalf("applyEnvTier AREION_FORCE_TIER failed: got %s", Tier())
+	}
+	t.Setenv("AREION_FORCE_TIER", "")
+	_ = SetTier(orig)
 
 	buf := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	Zeroize(buf)
@@ -755,66 +848,227 @@ func TestCryptoSignerAndMLKEM768(t *testing.T) {
 	if _, err := HPKEOpenMLKEM768(nil, kemCT, info, ad, ct, &tag); err == nil {
 		t.Fatal("HPKEOpenMLKEM768 accepted nil decapsulation key")
 	}
+	if _, _, _, err := HPKESealMLKEM768([]byte("short"), info, ad, pt); err == nil {
+		t.Fatal("HPKESealMLKEM768 accepted invalid encapsulation key")
+	}
+	if _, err := HPKEOpenMLKEM768(dk, []byte("short"), info, ad, ct, &tag); err == nil {
+		t.Fatal("HPKEOpenMLKEM768 accepted invalid KEM ciphertext")
+	}
 
-	// 2. FAESTPrivateKey / FAESTPublicKey crypto.Signer interface
-	var fSeed [32]byte
-	for i := range fSeed {
-		fSeed[i] = byte(0x11 + i)
+	// Edge cases for KDFExpand, GF128PolyMAC, VOLEXorRow, WOTS chain, and ctDiff helpers
+	KDFExpand(nil, nil, nil)
+	var kdfOut [64]byte
+	var sec64 [64]byte
+	KDFExpand(nil, nil, kdfOut[:])
+	KDFExpand(sec64[:], nil, kdfOut[:])
+
+	var wotsOut, wotsIn, wotsAdrs [4][32]byte
+	var kpub1, kpub2 [32]byte
+	wotsIn[0][0] = 0x42
+	slhWOTSChain256x4Software(&wotsOut, &wotsIn, &wotsAdrs, &kpub1, &kpub2, 0, 0)
+	if wotsOut != wotsIn {
+		t.Fatal("slhWOTSChain256x4Software with steps=0 modified input")
 	}
-	fPK, fSK := FAESTKeygen128f(&fSeed)
-	faestSigner := &FAESTPrivateKey{
-		Variant: "128f",
-		Bytes:   fSK[:],
-		Pub: FAESTPublicKey{
-			Variant: "128f",
-			Bytes:   fPK[:],
-		},
+
+	var d32a, d32b [32]byte
+	var d288a, d288b [288]byte
+	if ctDiff32(&d32a, &d32b) != 0 || ctDiff288(&d288a, &d288b) != 0 {
+		t.Fatal("ctDiff returned non-zero for identical buffers")
 	}
-	var _ crypto.Signer = faestSigner
-	if !faestSigner.Pub.Equal(faestSigner.Public()) {
-		t.Fatal("FAESTPublicKey.Equal failed on identical key")
+	d32b[15] = 1
+	d288b[200] = 1
+	if ctDiff32(&d32a, &d32b) == 0 || ctDiff288(&d288a, &d288b) == 0 {
+		t.Fatal("ctDiff returned zero for differing buffers")
 	}
+
+	origTier := Tier()
+	for _, tier := range AvailableTiers() {
+		if err := SetTier(tier); err != nil {
+			t.Fatal(err)
+		}
+		var chi, acc [16]byte
+		chi[0] = 0x03
+		if got := GF128PolyMAC(nil, nil, &chi); got != ([16]byte{}) {
+			t.Fatalf("[%s] GF128PolyMAC(nil, nil) non-zero", tier)
+		}
+		dispatchGF128PolyMAC(&acc, nil, nil, &chi)
+		if acc != ([16]byte{}) {
+			t.Fatalf("[%s] dispatchGF128PolyMAC(nil, nil) non-zero", tier)
+		}
+		aBlocks := make([][16]byte, 2)
+		bBlocks := make([][16]byte, 1)
+		aBlocks[0][0] = 2
+		bBlocks[0][0] = 3
+		_ = GF128PolyMAC(aBlocks, bBlocks, &chi)
+		dispatchGF128PolyMAC(&acc, make([]byte, 32), make([]byte, 16), &chi)
+
+		dispatchVOLEXorRow(nil, nil)
+		dispatchVOLEXorRowNoWipe(nil, nil)
+		for _, n := range []int{7, 23, 71} {
+			dst1 := make([]byte, n+5)
+			dst2 := make([]byte, n+5)
+			src := make([]byte, n)
+			for i := range src {
+				src[i] = byte(i + 1)
+			}
+			dispatchVOLEXorRow(dst1, src)
+			dispatchVOLEXorRowNoWipe(dst2, src)
+			if !bytes.Equal(dst1[:n], src) || !bytes.Equal(dst2[:n], src) {
+				t.Fatalf("[%s] dispatchVOLEXorRow failed for len=%d", tier, n)
+			}
+		}
+	}
+	_ = SetTier(origTier)
+
+	// 2. FAESTPrivateKey / FAESTPublicKey crypto.Signer interface across all variants
 	msg := []byte("crypto.Signer test message")
-	fSig, err := faestSigner.Sign(bytes.NewReader(make([]byte, 32)), msg, crypto.Hash(0))
-	if err != nil {
-		t.Fatalf("FAESTPrivateKey.Sign: %v", err)
+	var fSeed32 [32]byte
+	var fSeed64 [64]byte
+	for i := range fSeed64 {
+		fSeed64[i] = byte(0x11 + i)
 	}
-	if !faestSigner.Pub.Verify(msg, fSig) {
-		t.Fatal("FAESTPublicKey.Verify failed on valid signature")
-	}
-	fSig[0] ^= 0x01
-	if faestSigner.Pub.Verify(msg, fSig) {
-		t.Fatal("FAESTPublicKey.Verify accepted tampered signature")
+	copy(fSeed32[:], fSeed64[:32])
+
+	fPK128s, fSK128s := FAESTKeygen128s(&fSeed32)
+	fPK128f, fSK128f := FAESTKeygen128f(&fSeed32)
+	fPK256s, fSK256s := FAESTKeygen256s(&fSeed64)
+	fPK256f, fSK256f := FAESTKeygen256f(&fSeed64)
+	fPKEM2s, fSKEM2s := FAESTEM2Keygen256s(&fSeed64)
+	fPKEM2f, fSKEM2f := FAESTEM2Keygen256f(&fSeed64)
+
+	// Large message (> 22528 bytes) to cover heap fallback in faestSignCoreBody & faestVerifyCoreBody
+	largeMsg := make([]byte, 23000)
+	var opt16Zero [16]byte
+	largeSig := FAESTSign128f(&fSK128f, largeMsg, &opt16Zero)
+	if !FAESTVerify128f(&fPK128f, largeMsg, &largeSig) {
+		t.Fatal("FAESTVerify128f failed on 23000-byte message")
 	}
 
-	// 3. SLHDSAPrivateKey / SLHDSAPublicKey crypto.Signer interface
-	var sSeed [48]byte
-	for i := range sSeed {
-		sSeed[i] = byte(0x21 + i)
+	faestCases := []struct {
+		variant string
+		pk      []byte
+		sk      []byte
+	}{
+		{"128s", fPK128s[:], fSK128s[:]},
+		{"128f", fPK128f[:], fSK128f[:]},
+		{"256s", fPK256s[:], fSK256s[:]},
+		{"256f", fPK256f[:], fSK256f[:]},
+		{"em2-256s", fPKEM2s[:], fSKEM2s[:]},
+		{"em2-256f", fPKEM2f[:], fSKEM2f[:]},
 	}
-	sPK, sSK := SLHDSAKeygen128f(&sSeed)
-	slhSigner := &SLHDSAPrivateKey{
-		Variant: "128f",
-		Bytes:   sSK[:],
-		Pub: SLHDSAPublicKey{
-			Variant: "128f",
-			Bytes:   sPK[:],
-		},
+	for _, tc := range faestCases {
+		signer := &FAESTPrivateKey{
+			Variant: tc.variant,
+			Bytes:   tc.sk,
+			Pub:     FAESTPublicKey{Variant: tc.variant, Bytes: tc.pk},
+		}
+		var _ crypto.Signer = signer
+		if !signer.Pub.Equal(signer.Public()) {
+			t.Fatalf("FAESTPublicKey.Equal failed for %s", tc.variant)
+		}
+		if signer.Pub.Equal(&FAESTPublicKey{Variant: "other", Bytes: tc.pk}) {
+			t.Fatalf("FAESTPublicKey.Equal matched different variant for %s", tc.variant)
+		}
+		if signer.Pub.Equal("not-a-faest-key") {
+			t.Fatalf("FAESTPublicKey.Equal matched non-FAEST key for %s", tc.variant)
+		}
+		sig, err := signer.Sign(nil, msg, crypto.Hash(0))
+		if err != nil {
+			t.Fatalf("FAESTPrivateKey.Sign(%s): %v", tc.variant, err)
+		}
+		if !signer.Pub.Verify(msg, sig) {
+			t.Fatalf("FAESTPublicKey.Verify(%s) failed on valid signature", tc.variant)
+		}
+		if signer.Pub.Verify(msg, sig[:10]) {
+			t.Fatalf("FAESTPublicKey.Verify(%s) accepted truncated signature", tc.variant)
+		}
+		badPub := FAESTPublicKey{Variant: tc.variant, Bytes: tc.pk[:5]}
+		if badPub.Verify(msg, sig) {
+			t.Fatalf("FAESTPublicKey.Verify(%s) accepted truncated public key", tc.variant)
+		}
+		badPriv := FAESTPrivateKey{Variant: tc.variant, Bytes: tc.sk[:5]}
+		if _, err := badPriv.Sign(nil, msg, nil); err == nil {
+			t.Fatalf("FAESTPrivateKey.Sign(%s) accepted truncated secret key", tc.variant)
+		}
 	}
-	var _ crypto.Signer = slhSigner
-	if !slhSigner.Pub.Equal(slhSigner.Public()) {
-		t.Fatal("SLHDSAPublicKey.Equal failed on identical key")
+	if (&FAESTPublicKey{Variant: "unknown"}).Verify(msg, nil) {
+		t.Fatal("FAESTPublicKey.Verify accepted unknown variant")
 	}
-	sSig, err := slhSigner.Sign(bytes.NewReader(make([]byte, 32)), msg, crypto.Hash(0))
-	if err != nil {
-		t.Fatalf("SLHDSAPrivateKey.Sign: %v", err)
+	if _, err := (&FAESTPrivateKey{Variant: "unknown"}).Sign(nil, msg, nil); err == nil {
+		t.Fatal("FAESTPrivateKey.Sign accepted unknown variant")
 	}
-	if !slhSigner.Pub.Verify(msg, sSig) {
-		t.Fatal("SLHDSAPublicKey.Verify failed on valid signature")
+
+	// 3. SLHDSAPrivateKey / SLHDSAPublicKey crypto.Signer interface across all variants
+	var sSeed48 [48]byte
+	var sSeed96 [96]byte
+	for i := range sSeed96 {
+		sSeed96[i] = byte(0x21 + i)
 	}
-	sSig[0] ^= 0x01
-	if slhSigner.Pub.Verify(msg, sSig) {
-		t.Fatal("SLHDSAPublicKey.Verify accepted tampered signature")
+	copy(sSeed48[:], sSeed96[:48])
+
+	sPK128f, sSK128f := SLHDSAKeygen128f(&sSeed48)
+	sPK128s, sSK128s := SLHDSAKeygen128s(&sSeed48)
+	sPK256f, sSK256f := SLHDSAKeygen256f(&sSeed96)
+	sPK256s, sSK256s := SLHDSAKeygen256s(&sSeed96)
+	sPKTEM, sSKTEM := SLHDSATEMKeygen256f(&sSeed96)
+
+	// Cover optRand == nil in slhSignCoreBody
+	sigNilOpt := SLHDSASign128f(&sSK128f, msg, nil)
+	if !SLHDSAVerify128f(&sPK128f, msg, &sigNilOpt) {
+		t.Fatal("SLHDSAVerify128f failed on nil-optRand signature")
+	}
+
+	slhCases := []struct {
+		variant string
+		pk      []byte
+		sk      []byte
+	}{
+		{"128f", sPK128f[:], sSK128f[:]},
+		{"128s", sPK128s[:], sSK128s[:]},
+		{"256f", sPK256f[:], sSK256f[:]},
+		{"256s", sPK256s[:], sSK256s[:]},
+		{"tem-256f", sPKTEM[:], sSKTEM[:]},
+	}
+	for _, tc := range slhCases {
+		signer := &SLHDSAPrivateKey{
+			Variant: tc.variant,
+			Bytes:   tc.sk,
+			Pub:     SLHDSAPublicKey{Variant: tc.variant, Bytes: tc.pk},
+		}
+		var _ crypto.Signer = signer
+		if !signer.Pub.Equal(signer.Public()) {
+			t.Fatalf("SLHDSAPublicKey.Equal failed for %s", tc.variant)
+		}
+		if signer.Pub.Equal(&SLHDSAPublicKey{Variant: "other", Bytes: tc.pk}) {
+			t.Fatalf("SLHDSAPublicKey.Equal matched different variant for %s", tc.variant)
+		}
+		if signer.Pub.Equal("not-an-slhdsa-key") {
+			t.Fatalf("SLHDSAPublicKey.Equal matched non-SLHDSA key for %s", tc.variant)
+		}
+		sig, err := signer.Sign(nil, msg, crypto.Hash(0))
+		if err != nil {
+			t.Fatalf("SLHDSAPrivateKey.Sign(%s): %v", tc.variant, err)
+		}
+		if !signer.Pub.Verify(msg, sig) {
+			t.Fatalf("SLHDSAPublicKey.Verify(%s) failed on valid signature", tc.variant)
+		}
+		if signer.Pub.Verify(msg, sig[:10]) {
+			t.Fatalf("SLHDSAPublicKey.Verify(%s) accepted truncated signature", tc.variant)
+		}
+		badPub := SLHDSAPublicKey{Variant: tc.variant, Bytes: tc.pk[:5]}
+		if badPub.Verify(msg, sig) {
+			t.Fatalf("SLHDSAPublicKey.Verify(%s) accepted truncated public key", tc.variant)
+		}
+		badPriv := SLHDSAPrivateKey{Variant: tc.variant, Bytes: tc.sk[:5]}
+		if _, err := badPriv.Sign(nil, msg, nil); err == nil {
+			t.Fatalf("SLHDSAPrivateKey.Sign(%s) accepted truncated secret key", tc.variant)
+		}
+	}
+	if (&SLHDSAPublicKey{Variant: "unknown"}).Verify(msg, nil) {
+		t.Fatal("SLHDSAPublicKey.Verify accepted unknown variant")
+	}
+	if _, err := (&SLHDSAPrivateKey{Variant: "unknown"}).Sign(nil, msg, nil); err == nil {
+		t.Fatal("SLHDSAPrivateKey.Sign accepted unknown variant")
 	}
 }
 

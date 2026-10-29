@@ -2305,14 +2305,6 @@ func qsXtimeByteWire(out, w *qsByteWire) {
 var qsInvShiftRowsIdx = [16]int{0, 13, 10, 7, 4, 1, 14, 11, 8, 5, 2, 15, 12, 9, 6, 3}
 
 func qsInvShiftRowsBlock(out, in *[16]qsByteWire) {
-	if out == in {
-		var tmp [16]qsByteWire
-		for i := 0; i < 16; i++ {
-			tmp[i] = in[qsInvShiftRowsIdx[i]]
-		}
-		*out = tmp
-		return
-	}
 	for i := 0; i < 16; i++ {
 		out[i] = in[qsInvShiftRowsIdx[i]]
 	}

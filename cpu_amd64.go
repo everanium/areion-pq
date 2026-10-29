@@ -22,18 +22,9 @@ func hasVAESBit() bool {
 	return ecx7&(1<<9) != 0
 }
 
-// hasVPCLMULBit reads the VPCLMULQDQ bit (CPUID leaf 7, ECX bit 10) directly.
-func hasVPCLMULBit() bool {
-	if !cpu.X86.HasAVX2 {
-		return false
-	}
-	_, _, ecx7, _ := cpuid(7, 0)
-	return ecx7&(1<<10) != 0
-}
-
 func probeCPU() (aesni, vex, armCrypto, vaesAVX2, avx512 bool) {
 	hasPCLMULQDQ = cpu.X86.HasPCLMULQDQ
-	hasVPCLMULQDQ = (cpu.X86.HasAVX && cpu.X86.HasPCLMULQDQ) || hasVPCLMULBit()
+	hasVPCLMULQDQ = cpu.X86.HasAVX && cpu.X86.HasPCLMULQDQ
 	hasAVX2 = cpu.X86.HasAVX2
 	aesni = cpu.X86.HasAES
 	vex = cpu.X86.HasAES && cpu.X86.HasAVX

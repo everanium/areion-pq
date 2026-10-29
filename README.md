@@ -9,7 +9,7 @@ Built on **[`everanium/areion`](https://github.com/everanium/areion)**. Companio
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/everanium/areion-pq.svg)](https://pkg.go.dev/github.com/everanium/areion-pq)
 [![golangci-lint](https://img.shields.io/badge/golangci--lint-passing-green)](https://golangci-lint.run)
-[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/everanium/areion-pq)
+[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/everanium/areion-pq)
 [![License: Apache-2.0 / MIT](https://img.shields.io/badge/License-Apache_2.0_OR_MIT-blue.svg)](#license)
 
 ---
