@@ -246,6 +246,46 @@ On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`238.7 us` (`4,1
 
 On AWS Graviton 4 (`arm64`), `SLHDSAVerify128f` completes in **`403.8 us` (`2,476 ops/s`)** and `SLHDSAVerify256f` in **`469.3 us` (`2,131 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`2.03 ms` / `1.96 ms`** and `FAESTSign256f` / `FAESTVerify256f` in **`4.69 ms` / `4.60 ms`**.
 
+### 3. Comparison with Official `NIST FIPS 205` (`SLH-DSA-SHA2 / SHAKE`) & Official `FAEST` (`v3.0.3`) (ms/op)
+
+3-run averaged `Sign` / `Verify` latencies (`ms/op`, `>= 500 ms` per benchmark pass) measured under identical conditions on the same **Intel® Core™ i7-11700K (`3.60 GHz`, `x86-64`)** and **AWS Graviton 4 (`c8g.4xlarge`, Neoverse-V2, `2.80 GHz`, `ARM64`)** hosts against [`cloudflare/circl/sign/slhdsa`](https://github.com/cloudflare/circl) (`v1.6.5`), [`open-quantum-safe/liboqs`](https://github.com/open-quantum-safe/liboqs) (`v0.16.0`, `-O3 -march=native` / `-mcpu=neoverse-v2` + OpenSSL `3.6.5` hardware `SHA-NI` / `ARMv8 Crypto` + `AVX-512` / `NEON` `Keccak`), and [`faest-sign/faest-ref`](https://github.com/faest-sign/faest-ref) (`v3.0.3`, `-O3` + `AES-NI` / `ARMv8 AES` + `PCLMULQDQ` / `PMULL` + `AVX2` / `NEON` `SHA3`):
+
+#### A. Stateless Hash-Based Signatures: `SLH-DSA-Areion` vs. `SLH-DSA-SHA2` & `SLH-DSA-SHAKE` (`NIST FIPS 205`)
+
+| Scheme / Implementation | Sig (B) | i7-11700K Sign / Verify (ms) | Graviton 4 Sign / Verify (ms) | Speedup (`areion-pq` vs. Baseline) |
+| :--- | :---: | :---: | :---: | :--- |
+| **`SLHDSASign128f / SLHDSAVerify128f` (`areion-pq`)** | **17,088** | **3.86 / 0.24** | **6.67 / 0.40** | **15r `Areion512-DM` + `SoEM256x4`** |
+| `SLH-DSA-SHA2-128f` (`cloudflare/circl` Go) | 17,088 | 12.21 / 0.74 | 12.88 / 0.79 | **`3.2× / 3.1×` (x86), `1.9× / 2.0×` (ARM64)** |
+| `SLH-DSA-SHA2-128f` (`liboqs` C + OpenSSL) | 17,088 | 18.85 / 1.15 | 21.85 / 1.35 | **`4.9× / 4.8×` (x86), `3.3× / 3.3×` (ARM64)** |
+| `SLH-DSA-SHAKE-128f` (`cloudflare/circl` Go) | 17,088 | 43.50 / 2.64 | 41.71 / 2.50 | **`11.3× / 11.1×` (x86), `6.3× / 6.2×` (ARM64)** |
+| `SLH-DSA-SHAKE-128f` (`liboqs` C + SIMD SHA3) | 17,088 | 29.52 / 1.73 | 31.86 / 1.89 | **`7.6× / 7.2×` (x86), `4.8× / 4.7×` (ARM64)** |
+| **`SLHDSASign256f / SLHDSAVerify256f` (`areion-pq`)** | **49,856** | **5.95 / 0.30** | **10.14 / 0.47** | **15r `Areion512-DM-Clamped` + `SoEM256x4`** |
+| **`SLHDSATEMSign256f / SLHDSATEMVerify256f` (`areion-pq`)** | **49,856** | **14.38 / 0.41** | **26.26 / 0.75** | **20r `Areion-TEM-256` (`P2 + P1`)** |
+| `SLH-DSA-SHA2-256f` (`cloudflare/circl` Go) | 49,856 | 46.08 / 1.26 | 46.08 / 1.25 | **`7.7× / 4.3×` (x86), `4.5× / 2.7×` (ARM64)** |
+| `SLH-DSA-SHA2-256f` (`liboqs` C + OpenSSL) | 49,856 | 63.50 / 1.72 | 73.63 / 1.97 | **`10.7× / 5.8×` (x86), `7.3× / 4.2×` (ARM64)** |
+| `SLH-DSA-SHAKE-256f` (`cloudflare/circl` Go) | 49,856 | 135.66 / 3.68 | 134.10 / 3.59 | **`22.8× / 12.4×` (x86), `13.2× / 7.7×` (ARM64)** |
+| `SLH-DSA-SHAKE-256f` (`liboqs` C + SIMD SHA3) | 49,856 | 100.45 / 2.76 | 109.39 / 2.83 | **`16.9× / 9.3×` (x86), `10.8× / 6.0×` (ARM64)** |
+| `SLH-DSA-SHA2-128s / 256s` (`cloudflare/circl` Go) | 7,856 / 29,792 | 257.06 / 0.26 · 506.07 / 0.66 | 266.72 / 0.28 · 481.76 / 0.62 | Small-sig (`s`) `SHA-2` baseline |
+| `SLH-DSA-SHAKE-128s / 256s` (`cloudflare/circl` Go) | 7,856 / 29,792 | 902.25 / 0.95 · 1,287.48 / 1.83 | 867.71 / 0.92 · 1,270.54 / 1.81 | Small-sig (`s`) `SHAKE` baseline |
+
+#### B. `VOLE-in-the-Head` Signatures: `FAEST-Areion` vs. Official `FAEST` (`faest-ref v3.0.3`)
+
+| Scheme / Implementation | Witness / Sig (B) | i7-11700K Sign / Verify (ms) | Graviton 4 Sign / Verify (ms) | OWF & GGM Tree PRG |
+| :--- | :---: | :---: | :---: | :--- |
+| **`FAESTSign128f / FAESTVerify128f` (`areion-pq` Go)** | **304 / 7,456** | **1.66 / 1.63** | **2.03 / 1.96** | **10r `Areion-256` OWF + `Areion` PRG** |
+| **`areion_pq_faest_{sign,verify}128f` (`areion-pq-c` C)** | **304 / 7,456** | **1.23 / 1.15** | **2.11 / 1.95** | **10r `Areion-256` OWF + `Areion` PRG** |
+| `faest_128f` (`faest-ref v3.0.3` C) | 120 / 5,170 | 1.16 / 0.83 | 11.88 / 6.49 | 10r `AES-128` OWF + `SHAKE` tree PRG |
+| `faest_em_128f` (`faest-ref v3.0.3` C) | 80 / 4,170 | 1.13 / 0.72 | 9.17 / 4.46 | 10r `AES-128-EM` OWF + `SHAKE` tree PRG |
+| **`FAESTSign256f / FAESTVerify256f` (`areion-pq` Go)** | **320 / 20,512** | **3.90 / 3.92** | **4.69 / 4.60** | **10r `Areion-256` OWF + `Areion` PRG** |
+| **`areion_pq_faest_{sign,verify}256f` (`areion-pq-c` C)** | **320 / 20,512** | **2.78 / 2.91** | **4.79 / 4.44** | **10r `Areion-256` OWF + `Areion` PRG** |
+| **`FAESTEM2Sign256f / FAESTEM2Verify256f` (`areion-pq` Go)** | **608 / 30,368** | **5.84 / 5.44** | **7.36 / 6.96** | **20r `Areion-EM2-256` (`2^170.7` BBB)** |
+| `faest_256f` (`faest-ref v3.0.3` C) | 276 / 20,856 | 4.91 / 3.88 | 53.01 / 31.82 | 2×14r `AES-256` OWF + `SHAKE` tree PRG |
+| `faest_em_256f` (`faest-ref v3.0.3` C) | 224 / 18,084 | 3.90 / 3.14 | 40.52 / 21.16 | 14r `Rijndael-256-EM` + `SHAKE` tree PRG |
+| `faest_128s / faest_em_128s` (`faest-ref v3.0.3` C) | 120 / 4,066 · 80 / 3,466 | 8.40 / 5.61 · 5.89 / 4.78 | 32.57 / 22.04 · 16.44 / 9.61 | Small-sig (`128s`) `FAEST` baseline |
+| `faest_256s / faest_em_256s` (`faest-ref v3.0.3` C) | 276 / 16,626 · 224 / 14,554 | 33.18 / 27.91 · 23.53 / 21.96 | 160.16 / 135.65 · 70.29 / 49.32 | Small-sig (`256s`) `FAEST` baseline |
+
+Because `FAEST-Areion` accelerates both the 256-bit OWF (`Areion-256`) and the GGM tree / VOLE expansion (`Areion-512` / `SoEM512x4`) on hardware AES pipelines rather than `SHAKE256`, `FAESTSign256f` in `areion-pq` (`4.69 ms` Sign / `4.60 ms` Verify) is **`8.6×–11.3×` faster at signing and `4.6×–6.9×` faster at verification** on AWS Graviton 4 (`arm64`) than official `faest_em_256f` (`40.52 ms` / `21.16 ms`) and `faest_256f` (`53.01 ms` / `31.82 ms`), while `FAESTSign128f` (`2.03 ms` / `1.96 ms`) is **`4.5×–5.9×` faster at signing and `2.3×–3.3×` faster at verification** on AWS Graviton 4.
+
 ---
 
 ## Cryptanalytic & Algebraic Verification Suite (`analysis/`)
@@ -316,6 +356,31 @@ python3 analysis/run.py list
 python3 analysis/run.py all --quick
 ```
 See [`analysis/README.md`](analysis/README.md) for detailed results and logs (`analysis/results/*.txt`).
+
+### 5. Reproduce Upstream Reference Baselines (`cloudflare/circl`, `liboqs`, `faest-ref`)
+To benchmark the upstream `NIST FIPS 205` (`SLH-DSA-SHA2 / SHAKE`) and `FAEST` reference implementations in an isolated temporary directory without modifying this repository:
+```bash
+# 1. Go FIPS 205 SLH-DSA (cloudflare/circl/sign/slhdsa):
+mkdir -p /tmp/pq_ref_go && cd /tmp/pq_ref_go
+go mod init pq_ref_go && go get github.com/cloudflare/circl@latest
+go test -run=^none -bench=. -benchtime=500ms github.com/cloudflare/circl/sign/slhdsa
+
+# 2. C FIPS 205 SLH-DSA (open-quantum-safe/liboqs with OpenSSL & native SIMD):
+git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs
+cmake -S /tmp/liboqs -B /tmp/liboqs/build -DCMAKE_BUILD_TYPE=Release \
+  -DOQS_DIST_BUILD=OFF -DOQS_OPT_TARGET=native -DOQS_USE_OPENSSL=ON
+cmake --build /tmp/liboqs/build --target speed_sig -j
+/tmp/liboqs/build/tests/speed_sig SLH_DSA_PURE_SHA2_128F
+/tmp/liboqs/build/tests/speed_sig SLH_DSA_PURE_SHAKE_128F
+/tmp/liboqs/build/tests/speed_sig SLH_DSA_PURE_SHA2_256F
+/tmp/liboqs/build/tests/speed_sig SLH_DSA_PURE_SHAKE_256F
+
+# 3. Official C FAEST (faest-sign/faest-ref v3.0.3 with native AES/PCLMUL/SHA3):
+git clone --depth 1 https://github.com/faest-sign/faest-ref.git /tmp/faest-ref
+meson setup /tmp/faest-ref/build /tmp/faest-ref -Dbuildtype=release -Dc_args="-O3 -march=native"
+ninja -C /tmp/faest-ref/build
+rm -rf /tmp/pq_ref_go /tmp/liboqs /tmp/faest-ref
+```
 
 ---
 
