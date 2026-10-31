@@ -1,9 +1,12 @@
 $ python3 analysis/run.py vole
 === Go Empirical VOLE / QuickSilver & TEM2-SIV Audit ===
 GF(2^128) field axioms (comm/assoc/dist/Frob):    10000 / 10000 PASS
+GF(2^256) field axioms (comm/assoc/dist/Frob):    10000 / 10000 PASS
 Orthomorphism difference non-degeneracy:          10000 / 10000 PASS
-QuickSilver 32-S-box VOLE homomorphic check:      200 / 200 PASS
-QuickSilver 1-bit witness corruption rejection:   200 / 200 (100.0%)
-TEM2-SIV tag avalanche (meanHW / minHW / maxHW):  0.50002 / 0.49726 / 0.50278 (maxChi2=308.00)
+QuickSilver GF(2^128) 32-S-box VOLE check:        200 / 200 PASS
+QuickSilver GF(2^128) 1-bit corruption rejection: 200 / 200 (100.0%)
+QuickSilver GF(2^256) 32-S-box VOLE check:        200 / 200 PASS
+QuickSilver GF(2^256) 1-bit corruption rejection: 200 / 200 (100.0%)
+TEM2-SIV tag avalanche (meanHW / minHW / maxHW):  0.50004 / 0.49744 / 0.50312 (maxChi2=322.50)
 TEM2-SIV 1-bit ciphertext forgery rejections:     1600 / 1600 (zeroized: 1600 / 1600)
 TEM2-SIV 1-bit tag forgery rejections:            256 / 256 (100.0%)

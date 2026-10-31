@@ -21,7 +21,7 @@ var raceEnabled = func() bool {
 }()
 
 func TestVersionAndConstants(t *testing.T) {
-	if Version != "0.2.0" || VersionMajor != 0 || VersionMinor != 2 || VersionPatch != 0 {
+	if Version != "0.2.1" || VersionMajor != 0 || VersionMinor != 2 || VersionPatch != 1 {
 		t.Fatalf("unexpected version %s (%d.%d.%d)", Version, VersionMajor, VersionMinor, VersionPatch)
 	}
 	if BlockSize != 16 || State256Size != 32 || State512Size != 64 {
@@ -536,6 +536,17 @@ func TestFAESTSignaturesAllVariantsAndTamper(t *testing.T) {
 			t.Fatalf("FAESTEM2Verify256s accepted tampered signature at offset %d", off)
 		}
 	}
+
+	// Exercise QuickSilver evaluators across all parameter shapes
+	var qsM, qsT, qsC, qsDelta32, qsChi32 [32]byte
+	var qsDelta16, qsChi16 [16]byte
+	var qsW [608]byte
+	qsTags0 := make([][16]byte, 8*640)
+	qsTags1 := make([][16]byte, 8*640)
+	_, _ = faestEvalQuickSilver256(&faestParams128s, &qsM, &qsT, &qsC, qsW[:], qsTags0, qsTags1, false, &qsDelta32, &qsChi32)
+	_, _ = faestEvalQuickSilverLane(&faestParams256s, &qsM, &qsT, &qsC, qsW[:], qsTags0, false, &qsDelta16, &qsChi16)
+	_, _ = faestEvalQuickSilverLane(&faestParamsEM2256s, &qsM, &qsT, &qsC, qsW[:], qsTags0, false, &qsDelta16, &qsChi16)
+	_, _ = faestEvalQuickSilverLane(&faestParamsEM2256s, &qsM, &qsT, &qsC, nil, qsTags0, true, &qsDelta16, &qsChi16)
 }
 
 func TestSLHDSATweakableHashesAndSignatures(t *testing.T) {

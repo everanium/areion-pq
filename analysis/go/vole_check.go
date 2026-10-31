@@ -58,6 +58,36 @@ func gf128Xor(a, b *[16]byte) (out [16]byte) {
 	return out
 }
 
+func gf256Xor(a, b *[32]byte) (out [32]byte) {
+	for i := 0; i < 32; i++ {
+		out[i] = a[i] ^ b[i]
+	}
+	return out
+}
+
+// gf256FieldMulRef multiplies two elements in GF(2^256) = GF(2^128)[Y] / (Y^2 + Y + alpha) (alpha = 0x87).
+func gf256FieldMulRef(a, b *[32]byte) (out [32]byte) {
+	var a0, a1, b0, b1 [16]byte
+	copy(a0[:], a[0:16])
+	copy(a1[:], a[16:32])
+	copy(b0[:], b[0:16])
+	copy(b1[:], b[16:32])
+	aSum := gf128Xor(&a0, &a1)
+	bSum := gf128Xor(&b0, &b1)
+
+	p0 := gf128MulRef(&a0, &b0)
+	p1 := gf128MulRef(&a1, &b1)
+	pMid := gf128MulRef(&aSum, &bSum)
+
+	alpha := [16]byte{0x87}
+	p1Alpha := gf128MulRef(&p1, &alpha)
+	c0 := gf128Xor(&p0, &p1Alpha)
+	c1 := gf128Xor(&pMid, &p0)
+	copy(out[0:16], c0[:])
+	copy(out[16:32], c1[:])
+	return out
+}
+
 func mulOrtho256Ref(t, k *[32]byte) (out [32]byte) {
 	var t0, t1, k0, k1 [16]byte
 	copy(t0[:], t[0:16])
@@ -254,6 +284,143 @@ func qsEvalSBoxGateVerifier(xV, sV *[8][16]byte, delta, chi, bvAcc *[16]byte) {
 	}
 }
 
+func qsEvalBilinear256Ref(
+	aVal, bVal [8]byte,
+	aQ0, aQ1, bQ0, bQ1, cQ0, cQ1 *[8][16]byte,
+	isVerifier bool,
+	delta, chi, a0OrBVAcc, a1Acc *[32]byte,
+) {
+	var dLo, dHi, dMid [15][16]byte
+	var aSum, bSum [8][16]byte
+	for i := 0; i < 8; i++ {
+		aSum[i] = gf128Xor(&aQ0[i], &aQ1[i])
+		bSum[i] = gf128Xor(&bQ0[i], &bQ1[i])
+	}
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 8; j++ {
+			pLo := gf128MulRef(&aQ0[i], &bQ0[j])
+			pHi := gf128MulRef(&aQ1[i], &bQ1[j])
+			pMid := gf128MulRef(&aSum[i], &bSum[j])
+			dLo[i+j] = gf128Xor(&dLo[i+j], &pLo)
+			dHi[i+j] = gf128Xor(&dHi[i+j], &pHi)
+			dMid[i+j] = gf128Xor(&dMid[i+j], &pMid)
+		}
+	}
+	rLo := qsReduceDeg14(&dLo)
+	rHi := qsReduceDeg14(&dHi)
+	rMid := qsReduceDeg14(&dMid)
+	alpha := [16]byte{0x87}
+
+	if !isVerifier {
+		var d1Lo, d1Hi [15][16]byte
+		for i := 0; i < 8; i++ {
+			for j := 0; j < 8; j++ {
+				if aVal[i] != 0 {
+					d1Lo[i+j] = gf128Xor(&d1Lo[i+j], &bQ0[j])
+					d1Hi[i+j] = gf128Xor(&d1Hi[i+j], &bQ1[j])
+				}
+				if bVal[j] != 0 {
+					d1Lo[i+j] = gf128Xor(&d1Lo[i+j], &aQ0[i])
+					d1Hi[i+j] = gf128Xor(&d1Hi[i+j], &aQ1[i])
+				}
+			}
+		}
+		p1Lo := qsReduceDeg14(&d1Lo)
+		p1Hi := qsReduceDeg14(&d1Hi)
+		for m := 0; m < 8; m++ {
+			pHiAlpha := gf128MulRef(&rHi[m], &alpha)
+			c0 := gf128Xor(&rLo[m], &pHiAlpha)
+			c1 := gf128Xor(&rMid[m], &rLo[m])
+			var p0_256, p1_256 [32]byte
+			copy(p0_256[0:16], c0[:])
+			copy(p0_256[16:32], c1[:])
+			l0 := gf128Xor(&p1Lo[m], &cQ0[m])
+			l1 := gf128Xor(&p1Hi[m], &cQ1[m])
+			copy(p1_256[0:16], l0[:])
+			copy(p1_256[16:32], l1[:])
+
+			*a0OrBVAcc = gf256FieldMulRef(a0OrBVAcc, chi)
+			*a0OrBVAcc = gf256Xor(a0OrBVAcc, &p0_256)
+			*a1Acc = gf256FieldMulRef(a1Acc, chi)
+			*a1Acc = gf256Xor(a1Acc, &p1_256)
+		}
+	} else {
+		for m := 0; m < 8; m++ {
+			pHiAlpha := gf128MulRef(&rHi[m], &alpha)
+			c0 := gf128Xor(&rLo[m], &pHiAlpha)
+			c1 := gf128Xor(&rMid[m], &rLo[m])
+			var p0_256, cTag256 [32]byte
+			copy(p0_256[0:16], c0[:])
+			copy(p0_256[16:32], c1[:])
+			copy(cTag256[0:16], cQ0[m][:])
+			copy(cTag256[16:32], cQ1[m][:])
+			cDel := gf256FieldMulRef(&cTag256, delta)
+			p0_256 = gf256Xor(&p0_256, &cDel)
+			*a0OrBVAcc = gf256FieldMulRef(a0OrBVAcc, chi)
+			*a0OrBVAcc = gf256Xor(a0OrBVAcc, &p0_256)
+		}
+	}
+}
+
+func qsEvalSBoxGate256Ref(
+	xByte, sByte byte,
+	xQ0, xQ1, sQ0, sQ1 *[8][16]byte,
+	isVerifier bool,
+	delta, chi, a0OrBVAcc, a1Acc *[32]byte,
+) {
+	var xVal, sVal, uVal, yVal, wVal, spVal [8]byte
+	for b := 0; b < 8; b++ {
+		xVal[b] = (xByte >> b) & 1
+		sVal[b] = (sByte >> b) & 1
+		spVal[b] = sVal[b] ^ ((0x63 >> b) & 1)
+	}
+	uVal[0] = xVal[0] ^ xVal[4] ^ xVal[6]
+	uVal[1] = xVal[4] ^ xVal[6] ^ xVal[7]
+	uVal[2] = xVal[1] ^ xVal[5]
+	uVal[3] = xVal[4] ^ xVal[5] ^ xVal[6] ^ xVal[7]
+	uVal[4] = xVal[2] ^ xVal[4] ^ xVal[7]
+	uVal[5] = xVal[5] ^ xVal[6]
+	uVal[6] = xVal[3] ^ xVal[5]
+	uVal[7] = xVal[6] ^ xVal[7]
+	for b := 0; b < 8; b++ {
+		yVal[b] = spVal[(b+2)%8] ^ spVal[(b+5)%8] ^ spVal[(b+7)%8]
+	}
+	wVal[0] = yVal[0] ^ yVal[4] ^ yVal[6]
+	wVal[1] = yVal[4] ^ yVal[6] ^ yVal[7]
+	wVal[2] = yVal[1] ^ yVal[5]
+	wVal[3] = yVal[4] ^ yVal[5] ^ yVal[6] ^ yVal[7]
+	wVal[4] = yVal[2] ^ yVal[4] ^ yVal[7]
+	wVal[5] = yVal[5] ^ yVal[6]
+	wVal[6] = yVal[3] ^ yVal[5]
+	wVal[7] = yVal[6] ^ yVal[7]
+
+	uQ0 := qsLiftSq(xQ0)
+	uQ1 := qsLiftSq(xQ1)
+	var sp0, sp1, yQ0, yQ1 [8][16]byte
+	var del0, del1 [16]byte
+	copy(del0[:], delta[0:16])
+	copy(del1[:], delta[16:32])
+	for b := 0; b < 8; b++ {
+		sp0[b] = sQ0[b]
+		sp1[b] = sQ1[b]
+		if isVerifier && ((0x63>>b)&1) != 0 {
+			sp0[b] = gf128Xor(&sp0[b], &del0)
+			sp1[b] = gf128Xor(&sp1[b], &del1)
+		}
+	}
+	for b := 0; b < 8; b++ {
+		for i := 0; i < 16; i++ {
+			yQ0[b][i] = sp0[(b+2)%8][i] ^ sp0[(b+5)%8][i] ^ sp0[(b+7)%8][i]
+			yQ1[b][i] = sp1[(b+2)%8][i] ^ sp1[(b+5)%8][i] ^ sp1[(b+7)%8][i]
+		}
+	}
+	wQ0 := qsLiftSq(&yQ0)
+	wQ1 := qsLiftSq(&yQ1)
+
+	qsEvalBilinear256Ref(uVal, yVal, &uQ0, &uQ1, &yQ0, &yQ1, xQ0, xQ1, isVerifier, delta, chi, a0OrBVAcc, a1Acc)
+	qsEvalBilinear256Ref(wVal, xVal, &wQ0, &wQ1, xQ0, xQ1, &yQ0, &yQ1, isVerifier, delta, chi, a0OrBVAcc, a1Acc)
+}
+
 // --- Track 3: Reference TEM2SIVEncrypt / TEM2SIVDecrypt ---
 
 func tem2SIVTagRef(key *[128]byte, nonce *[32]byte, ad, plaintext []byte) [32]byte {
@@ -368,11 +535,13 @@ func runVOLECheck(quick bool) {
 	}
 	rng := rand.New(rand.NewPCG(0x701E128, 0x517AEAD))
 
-	// 1. GF(2^128) field axioms & orthomorphism difference check
+	// 1. GF(2^128) & GF(2^256) field axioms & orthomorphism difference check
 	fieldPass := 0
+	field256Pass := 0
 	orthoPass := 0
 	for i := 0; i < nField; i++ {
 		var a, b, c [16]byte
+		var a256, b256, c256 [32]byte
 		var t, k1, k2 [32]byte
 		for j := 0; j < 16; j++ {
 			a[j] = byte(rng.Uint32())
@@ -380,6 +549,9 @@ func runVOLECheck(quick bool) {
 			c[j] = byte(rng.Uint32())
 		}
 		for j := 0; j < 32; j++ {
+			a256[j] = byte(rng.Uint32())
+			b256[j] = byte(rng.Uint32())
+			c256[j] = byte(rng.Uint32())
 			t[j] = byte(rng.Uint32())
 			k1[j] = byte(rng.Uint32())
 			k2[j] = byte(rng.Uint32())
@@ -404,6 +576,21 @@ func runVOLECheck(quick bool) {
 
 		if ab == ba && a_bc == ab_ac && sqApb == sqSum {
 			fieldPass++
+		}
+
+		ab256 := gf256FieldMulRef(&a256, &b256)
+		ba256 := gf256FieldMulRef(&b256, &a256)
+		bc256 := gf256Xor(&b256, &c256)
+		a_bc256 := gf256FieldMulRef(&a256, &bc256)
+		ac256 := gf256FieldMulRef(&a256, &c256)
+		ab_ac256 := gf256Xor(&ab256, &ac256)
+		apb256 := gf256Xor(&a256, &b256)
+		sqApb256 := gf256FieldMulRef(&apb256, &apb256)
+		sqA256 := gf256FieldMulRef(&a256, &a256)
+		sqB256 := gf256FieldMulRef(&b256, &b256)
+		sqSum256 := gf256Xor(&sqA256, &sqB256)
+		if ab256 == ba256 && a_bc256 == ab_ac256 && sqApb256 == sqSum256 {
+			field256Pass++
 		}
 
 		// Orthomorphism difference: L(dk) != 0 and (I ^ L)(dk) != 0
@@ -522,6 +709,118 @@ func runVOLECheck(quick bool) {
 		}
 	}
 
+	// 2b. QuickSilver VOLE 32-S-box batch verification over GF(2^256) (with 256-bit mask folding)
+	qs256ValidPass := 0
+	qs256CorruptRej := 0
+	for t := 0; t < nQS; t++ {
+		var delta256, chi256 [32]byte
+		for i := 0; i < 32; i++ {
+			delta256[i] = byte(rng.Uint32())
+			chi256[i] = byte(rng.Uint32())
+		}
+		delta256[0] |= 1
+		chi256[0] |= 1
+		var del0, del1 [16]byte
+		copy(del0[:], delta256[0:16])
+		copy(del1[:], delta256[16:32])
+
+		const nGates = 32
+		var xBytes, sBytes [nGates]byte
+		var xQ0, xQ1, sQ0, sQ1, xV0, xV1, sV0, sV1 [nGates][8][16]byte
+		for g := 0; g < nGates; g++ {
+			xb := byte(rng.Uint32())
+			sb := gf256Affine(gf256Inv(xb))
+			xBytes[g] = xb
+			sBytes[g] = sb
+			for b := 0; b < 8; b++ {
+				for k := 0; k < 16; k++ {
+					xQ0[g][b][k] = byte(rng.Uint32())
+					xQ1[g][b][k] = byte(rng.Uint32())
+					sQ0[g][b][k] = byte(rng.Uint32())
+					sQ1[g][b][k] = byte(rng.Uint32())
+				}
+				xV0[g][b] = xQ0[g][b]
+				xV1[g][b] = xQ1[g][b]
+				if ((xb >> b) & 1) != 0 {
+					xV0[g][b] = gf128Xor(&xV0[g][b], &del0)
+					xV1[g][b] = gf128Xor(&xV1[g][b], &del1)
+				}
+				sV0[g][b] = sQ0[g][b]
+				sV1[g][b] = sQ1[g][b]
+				if ((sb >> b) & 1) != 0 {
+					sV0[g][b] = gf128Xor(&sV0[g][b], &del0)
+					sV1[g][b] = gf128Xor(&sV1[g][b], &del1)
+				}
+			}
+		}
+
+		var uMask256, qMask256 [32]byte
+		for i := 0; i < 32; i++ {
+			uMask256[i] = byte(rng.Uint32())
+		}
+		var qMaskBits0, qMaskBits1, vMaskBits0, vMaskBits1 [256][16]byte
+		for m := 0; m < 256; m++ {
+			for k := 0; k < 16; k++ {
+				qMaskBits0[m][k] = byte(rng.Uint32())
+				qMaskBits1[m][k] = byte(rng.Uint32())
+			}
+			vMaskBits0[m] = qMaskBits0[m]
+			vMaskBits1[m] = qMaskBits1[m]
+			if ((uMask256[m/8] >> (m % 8)) & 1) != 0 {
+				vMaskBits0[m] = gf128Xor(&vMaskBits0[m], &del0)
+				vMaskBits1[m] = gf128Xor(&vMaskBits1[m], &del1)
+			}
+			var tag256, basis256 [32]byte
+			copy(tag256[0:16], qMaskBits0[m][:])
+			copy(tag256[16:32], qMaskBits1[m][:])
+			basis256[m/8] = 1 << (m % 8)
+			qm := gf256FieldMulRef(&tag256, &basis256)
+			qMask256 = gf256Xor(&qMask256, &qm)
+		}
+
+		var a0Acc256, a1Acc256, bvAcc256, unused256 [32]byte
+		for g := 0; g < nGates; g++ {
+			qsEvalSBoxGate256Ref(xBytes[g], sBytes[g], &xQ0[g], &xQ1[g], &sQ0[g], &sQ1[g], false, &delta256, &chi256, &a0Acc256, &a1Acc256)
+			qsEvalSBoxGate256Ref(0, 0, &xV0[g], &xV1[g], &sV0[g], &sV1[g], true, &delta256, &chi256, &bvAcc256, &unused256)
+		}
+		qsU256 := gf256Xor(&a1Acc256, &uMask256)
+		wPoly256 := gf256Xor(&a0Acc256, &qMask256)
+
+		var tildeVMask256 [32]byte
+		for m := 0; m < 256; m++ {
+			dBit := (qsU256[m/8] >> (m % 8)) & 1
+			tv0 := vMaskBits0[m]
+			tv1 := vMaskBits1[m]
+			if dBit != 0 {
+				tv0 = gf128Xor(&tv0, &del0)
+				tv1 = gf128Xor(&tv1, &del1)
+			}
+			var tag256, basis256 [32]byte
+			copy(tag256[0:16], tv0[:])
+			copy(tag256[16:32], tv1[:])
+			basis256[m/8] = 1 << (m % 8)
+			term := gf256FieldMulRef(&tag256, &basis256)
+			tildeVMask256 = gf256Xor(&tildeVMask256, &term)
+		}
+		wVerif256 := gf256Xor(&bvAcc256, &tildeVMask256)
+		if wVerif256 == wPoly256 {
+			qs256ValidPass++
+		}
+
+		sV0Bad := sV0
+		sV1Bad := sV1
+		sV0Bad[0][0] = gf128Xor(&sV0Bad[0][0], &del0)
+		sV1Bad[0][0] = gf128Xor(&sV1Bad[0][0], &del1)
+		var bv256Bad [32]byte
+		for g := 0; g < nGates; g++ {
+			qsEvalSBoxGate256Ref(0, 0, &xV0[g], &xV1[g], &sV0Bad[g], &sV1Bad[g], true, &delta256, &chi256, &bv256Bad, &unused256)
+		}
+		wVerif256Bad := gf256Xor(&bv256Bad, &tildeVMask256)
+		if wVerif256Bad != wPoly256 {
+			qs256CorruptRej++
+		}
+	}
+
 	// 3. TEM2-SIV tag avalanche and forgery rejection
 	var key128 [128]byte
 	var nonce32 [32]byte
@@ -585,16 +884,20 @@ func runVOLECheck(quick bool) {
 
 	fmt.Println("=== Go Empirical VOLE / QuickSilver & TEM2-SIV Audit ===")
 	fmt.Printf("GF(2^128) field axioms (comm/assoc/dist/Frob):    %d / %d PASS\n", fieldPass, nField)
+	fmt.Printf("GF(2^256) field axioms (comm/assoc/dist/Frob):    %d / %d PASS\n", field256Pass, nField)
 	fmt.Printf("Orthomorphism difference non-degeneracy:          %d / %d PASS\n", orthoPass, nField)
-	fmt.Printf("QuickSilver 32-S-box VOLE homomorphic check:      %d / %d PASS\n", qsValidPass, nQS)
-	fmt.Printf("QuickSilver 1-bit witness corruption rejection:   %d / %d (100.0%%)\n", qsCorruptRej, nQS)
+	fmt.Printf("QuickSilver GF(2^128) 32-S-box VOLE check:        %d / %d PASS\n", qsValidPass, nQS)
+	fmt.Printf("QuickSilver GF(2^128) 1-bit corruption rejection: %d / %d (100.0%%)\n", qsCorruptRej, nQS)
+	fmt.Printf("QuickSilver GF(2^256) 32-S-box VOLE check:        %d / %d PASS\n", qs256ValidPass, nQS)
+	fmt.Printf("QuickSilver GF(2^256) 1-bit corruption rejection: %d / %d (100.0%%)\n", qs256CorruptRej, nQS)
 	fmt.Printf("TEM2-SIV tag avalanche (meanHW / minHW / maxHW):  %.5f / %.5f / %.5f (maxChi2=%.2f)\n",
 		stSIV.meanHW, stSIV.minHW, stSIV.maxHW, stSIV.maxChi2)
 	fmt.Printf("TEM2-SIV 1-bit ciphertext forgery rejections:     %d / %d (zeroized: %d / %d)\n",
 		ctBitRejects, len(ct)*8, ctBitZeroed, len(ct)*8)
 	fmt.Printf("TEM2-SIV 1-bit tag forgery rejections:            %d / 256 (100.0%%)\n", tagBitRejects)
 
-	if fieldPass != nField || orthoPass != nField || qsValidPass != nQS || qsCorruptRej != nQS ||
+	if fieldPass != nField || field256Pass != nField || orthoPass != nField ||
+		qsValidPass != nQS || qsCorruptRej != nQS || qs256ValidPass != nQS || qs256CorruptRej != nQS ||
 		math.Abs(stSIV.meanHW-0.5) > 0.006 || ctBitRejects != len(ct)*8 || ctBitZeroed != len(ct)*8 || tagBitRejects != 256 {
 		panic("VOLE / TEM2-SIV verification failed")
 	}

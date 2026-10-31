@@ -21,7 +21,8 @@ Verifies:
        (Y = 0) for each X != 0x00, totaling 255 false accepts (X != 0, 0x63).
      - Naive X * Y ^ 1 == 0 fails completeness on (X = 0x00, S = 0x63).
   5. QuickSilver VOLE Homomorphic Gate Identity over GF(2^128) (x^128 + x^7 +
-     x^2 + x + 1, 0x87): B_V == A0 ^ (A1 * Delta) holds for 256 / 256 valid
+     x^2 + x + 1, 0x87) and GF(2^256) = GF(2^128)[Y] / (Y^2 + Y + alpha)
+     (alpha = 0x87): B_V == A0 ^ (A1 * Delta) holds for 256 / 256 valid
      pairs and fails with B_V ^ A0 ^ (A1 * Delta) == C_bit * Delta^2 != 0 on
      invalid pairs.
 """
@@ -175,11 +176,28 @@ def gf128_mul(a: int, b: int) -> int:
     return r
 
 
-def verify_vole_quicksilver_gate() -> tuple[int, int]:
-    """Verify Prover (A0, A1) vs Verifier B_V homomorphic identity over GF(2^128)."""
-    rng = random.Random(0x511C4511)
-    delta = rng.getrandbits(128) | 1
-    delta_sq = gf128_mul(delta, delta)
+MASK_128 = (1 << 128) - 1
+
+
+def gf256_field_mul(a: int, b: int) -> int:
+    """Karatsuba multiplication in GF(2^256) = GF(2^128)[Y] / (Y^2 + Y + alpha), alpha = 0x87."""
+    a0, a1 = a & MASK_128, (a >> 128) & MASK_128
+    b0, b1 = b & MASK_128, (b >> 128) & MASK_128
+    p0 = gf128_mul(a0, b0)
+    p1 = gf128_mul(a1, b1)
+    mid = gf128_mul(a0 ^ a1, b0 ^ b1)
+    p1_alpha = gf128_mul(p1, 0x87)
+    c0 = p0 ^ p1_alpha
+    c1 = mid ^ p0
+    return c0 | (c1 << 128)
+
+
+def verify_vole_quicksilver_gate(bits_width: int = 128) -> tuple[int, int]:
+    """Verify Prover (A0, A1) vs Verifier B_V homomorphic identity over GF(2^128) or GF(2^256)."""
+    rng = random.Random(0x511C4511 ^ bits_width)
+    mul_fn = gf128_mul if bits_width == 128 else gf256_field_mul
+    delta = rng.getrandbits(bits_width) | 1
+    delta_sq = mul_fn(delta, delta)
 
     def lift_sq(wires):
         return gate_sq_gf256(wires)
@@ -206,8 +224,8 @@ def verify_vole_quicksilver_gate() -> tuple[int, int]:
     def eval_vole_pair(x_byte: int, s_byte: int) -> tuple[bool, bool]:
         x_val = byte_to_bits(x_byte)
         s_val = byte_to_bits(s_byte)
-        x_Q = [rng.getrandbits(128) for _ in range(8)]
-        s_Q = [rng.getrandbits(128) for _ in range(8)]
+        x_Q = [rng.getrandbits(bits_width) for _ in range(8)]
+        s_Q = [rng.getrandbits(bits_width) for _ in range(8)]
         x_V = [x_Q[i] ^ (delta if x_val[i] else 0) for i in range(8)]
         s_V = [s_Q[i] ^ (delta if s_val[i] else 0) for i in range(8)]
 
@@ -237,28 +255,28 @@ def verify_vole_quicksilver_gate() -> tuple[int, int]:
 
         for i in range(8):
             for j in range(8):
-                d1_A0[i + j] ^= gf128_mul(u_Q[i], y_Q[j])
+                d1_A0[i + j] ^= mul_fn(u_Q[i], y_Q[j])
                 d1_A1[i + j] ^= (y_Q[j] if u_val[i] else 0) ^ (u_Q[i] if y_val[j] else 0)
-                d1_BV[i + j] ^= gf128_mul(u_V[i], y_V[j])
+                d1_BV[i + j] ^= mul_fn(u_V[i], y_V[j])
 
-                d2_A0[i + j] ^= gf128_mul(w_Q[i], x_Q[j])
+                d2_A0[i + j] ^= mul_fn(w_Q[i], x_Q[j])
                 d2_A1[i + j] ^= (x_Q[j] if w_val[i] else 0) ^ (w_Q[i] if x_val[j] else 0)
-                d2_BV[i + j] ^= gf128_mul(w_V[i], x_V[j])
+                d2_BV[i + j] ^= mul_fn(w_V[i], x_V[j])
 
         p1_A0 = reduce_deg14(d1_A0)
         p1_A1 = [reduce_deg14(d1_A1)[i] ^ x_Q[i] for i in range(8)]
-        p1_BV = [reduce_deg14(d1_BV)[i] ^ gf128_mul(x_V[i], delta) for i in range(8)]
+        p1_BV = [reduce_deg14(d1_BV)[i] ^ mul_fn(x_V[i], delta) for i in range(8)]
 
         p2_A0 = reduce_deg14(d2_A0)
         p2_A1 = [reduce_deg14(d2_A1)[i] ^ y_Q[i] for i in range(8)]
-        p2_BV = [reduce_deg14(d2_BV)[i] ^ gf128_mul(y_V[i], delta) for i in range(8)]
+        p2_BV = [reduce_deg14(d2_BV)[i] ^ mul_fn(y_V[i], delta) for i in range(8)]
 
         c1_byte, c2_byte = gate_constraints_16(x_byte, s_byte)
         all_zero_diff = True
         exact_err_law = True
         for i in range(8):
-            diff1 = p1_BV[i] ^ p1_A0[i] ^ gf128_mul(p1_A1[i], delta)
-            diff2 = p2_BV[i] ^ p2_A0[i] ^ gf128_mul(p2_A1[i], delta)
+            diff1 = p1_BV[i] ^ p1_A0[i] ^ mul_fn(p1_A1[i], delta)
+            diff2 = p2_BV[i] ^ p2_A0[i] ^ mul_fn(p2_A1[i], delta)
             if diff1 != 0 or diff2 != 0:
                 all_zero_diff = False
             exp1 = delta_sq if ((c1_byte >> i) & 1) else 0
@@ -350,7 +368,8 @@ def main() -> None:
                     if x != 0x00 and s == 0x63:
                         c2_spurious_per_nonzero_x += 1
 
-    vole_valid_ok, vole_invalid_rej = verify_vole_quicksilver_gate()
+    vole_valid_ok, vole_invalid_rej = verify_vole_quicksilver_gate(128)
+    vole256_valid_ok, vole256_invalid_rej = verify_vole_quicksilver_gate(256)
 
     print("=== QuickSilver GF(2^8) Degree-2 S-Box Completeness & Soundness Audit ===")
     print(f"Bit-level unary gates (Sq, Affine, AffineInv): {unary_ok} / 256 exact")
@@ -367,6 +386,9 @@ def main() -> None:
     print("--- QuickSilver GF(2^128) VOLE Homomorphic Gate Identity ---")
     print(f"Valid pairs satisfying B_V == A0 ^ A1*Delta:   {vole_valid_ok} / 256")
     print(f"Random invalid pairs rejected (err = C*Delta^2):{vole_invalid_rej} / 1000")
+    print("--- QuickSilver GF(2^256) VOLE Homomorphic Gate Identity ---")
+    print(f"Valid pairs satisfying B_V == A0 ^ A1*Delta:   {vole256_valid_ok} / 256")
+    print(f"Random invalid pairs rejected (err = C*Delta^2):{vole256_invalid_rej} / 1000")
 
     assert unary_ok == 256
     assert mul_ok == 65536
@@ -377,6 +399,8 @@ def main() -> None:
     assert invalid_pass_c2_only == 255 and c2_spurious_per_nonzero_x == 255
     assert vole_valid_ok == 256
     assert vole_invalid_rej == 1000
+    assert vole256_valid_ok == 256
+    assert vole256_invalid_rej == 1000
 
 
 if __name__ == "__main__":

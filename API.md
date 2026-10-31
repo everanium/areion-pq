@@ -41,10 +41,10 @@ Built on **[`everanium/areion`](https://github.com/everanium/areion)**; companio
 
 | Constant | Value | Description |
 | :--- | :---: | :--- |
-| `Version` | `"0.2.0"` | Semantic version string of `areion-pq` |
+| `Version` | `"0.2.1"` | Semantic version string of `areion-pq` |
 | `VersionMajor` | `0` | Major version number |
 | `VersionMinor` | `2` | Minor version number |
-| `VersionPatch` | `0` | Patch version number |
+| `VersionPatch` | `1` | Patch version number |
 | `BlockSize` | `16` | 128-bit AES / `GF(2^128)` block size in bytes |
 | `State256Size` | `32` | 256-bit `Areion-256` permutation state size in bytes |
 | `State512Size` | `64` | 512-bit `Areion-512` permutation state size in bytes |
@@ -151,28 +151,28 @@ By the Free-Round Witness Theorem ([`analysis/README.md`](analysis/README.md#a-f
 
 ### 4. Track 1: FAEST-Areion VOLE-in-the-Head Zero-Knowledge Signatures
 
-Post-quantum zero-knowledge signature schemes built on the `Areion-256` one-way function `C = P1_256(M ⊕ K1) ⊕ MulOrtho256(T, K1)` (`FAEST-Areion-128{s,f}` and `FAEST-Areion-256{s,f}`) and the 20-round 2-round Even-Mansour one-way function `C = P2_256(P1_256(M ⊕ K1) ⊕ sigma(K1)) ⊕ K1 ⊕ sigma(K1)` (`FAEST-Areion-EM2-256{s,f}`). Pass `optRand = nil` for deterministic signing or a random byte array to hedge against fault/side-channel attacks.
+Post-quantum zero-knowledge signature schemes built on the `Areion-256` one-way function `C = P1_256(M ⊕ K1) ⊕ MulOrtho256(T, K1)` (`FAEST-Areion-128{s,f}` and `FAEST-Areion-256{s,f}`) and the 20-round 2-round Even-Mansour one-way function `C = P2_256(P1_256(M ⊕ K1) ⊕ sigma(K1)) ⊕ K1 ⊕ sigma(K1)` (`FAEST-Areion-EM2-256{s,f}`). `QuickSilver` polynomial authentication is evaluated over `GF(2^128)` for `FAEST-Areion-128{s,f}` (`128`-bit soundness) and over the quadratic extension field `GF(2^256) = GF(2^128)[Y] / (Y^2 + Y + alpha)` (`alpha = 0x87`, via Karatsuba over `GF128Mul`) for `FAEST-Areion-256{s,f}` and `FAEST-Areion-EM2-256{s,f}` (`256`-bit soundness). Pass `optRand = nil` for deterministic signing or a random byte array to hedge against fault/side-channel attacks.
 
 | Function Signature | Seed / PK / SK | Signature | Security Category |
 | :--- | :---: | :---: | :--- |
 | `FAESTKeygen128s(seed *[32]byte) (pk [48]byte, sk [64]byte)` | 32 / 48 / 64 B | — | NIST Category 1 (`lambda = 128`, `tau = 13`) |
 | `FAESTSign128s(sk *[64]byte, msg []byte, optRand *[16]byte) (sig [6448]byte)` | SK: 64 B | 6,448 B | NIST Category 1 small signature profile |
-| `FAESTVerify128s(pk *[48]byte, msg []byte, sig *[6448]byte) bool` | PK: 48 B | 6,448 B | Constant-time `QuickSilver` + GGM verification |
+| `FAESTVerify128s(pk *[48]byte, msg []byte, sig *[6448]byte) bool` | PK: 48 B | 6,448 B | Constant-time `GF(2^128)` `QuickSilver` + GGM verification |
 | `FAESTKeygen128f(seed *[32]byte) (pk [48]byte, sk [64]byte)` | 32 / 48 / 64 B | — | NIST Category 1 (`lambda = 128`, `tau = 16`) |
 | `FAESTSign128f(sk *[64]byte, msg []byte, optRand *[16]byte) (sig [7456]byte)` | SK: 64 B | 7,456 B | NIST Category 1 fast signing profile |
-| `FAESTVerify128f(pk *[48]byte, msg []byte, sig *[7456]byte) bool` | PK: 48 B | 7,456 B | Constant-time `QuickSilver` + GGM verification |
+| `FAESTVerify128f(pk *[48]byte, msg []byte, sig *[7456]byte) bool` | PK: 48 B | 7,456 B | Constant-time `GF(2^128)` `QuickSilver` + GGM verification |
 | `FAESTKeygen256s(seed *[64]byte) (pk [64]byte, sk [96]byte)` | 64 / 64 / 96 B | — | NIST Category 5 (`lambda = 256`, `tau = 26`) |
 | `FAESTSign256s(sk *[96]byte, msg []byte, optRand *[32]byte) (sig [18208]byte)` | SK: 96 B | 18,208 B | NIST Category 5 small signature profile |
-| `FAESTVerify256s(pk *[64]byte, msg []byte, sig *[18208]byte) bool` | PK: 64 B | 18,208 B | Constant-time `QuickSilver` + GGM verification |
+| `FAESTVerify256s(pk *[64]byte, msg []byte, sig *[18208]byte) bool` | PK: 64 B | 18,208 B | Constant-time `GF(2^256)` `QuickSilver` + GGM verification |
 | `FAESTKeygen256f(seed *[64]byte) (pk [64]byte, sk [96]byte)` | 64 / 64 / 96 B | — | NIST Category 5 (`lambda = 256`, `tau = 32`) |
 | `FAESTSign256f(sk *[96]byte, msg []byte, optRand *[32]byte) (sig [20512]byte)` | SK: 96 B | 20,512 B | NIST Category 5 fast signing profile |
-| `FAESTVerify256f(pk *[64]byte, msg []byte, sig *[20512]byte) bool` | PK: 64 B | 20,512 B | Constant-time `QuickSilver` + GGM verification |
+| `FAESTVerify256f(pk *[64]byte, msg []byte, sig *[20512]byte) bool` | PK: 64 B | 20,512 B | Constant-time `GF(2^256)` `QuickSilver` + GGM verification |
 | `FAESTEM2Keygen256s(seed *[64]byte) (pk [64]byte, sk [96]byte)` | 64 / 64 / 96 B | — | NIST Category 5 20-round `2-EM` (`tau = 26`) |
 | `FAESTEM2Sign256s(sk *[96]byte, msg []byte, optRand *[32]byte) (sig [25696]byte)` | SK: 96 B | 25,696 B | NIST Category 5 `2-EM` small signature profile |
-| `FAESTEM2Verify256s(pk *[64]byte, msg []byte, sig *[25696]byte) bool` | PK: 64 B | 25,696 B | Constant-time 640-S-box `QuickSilver` verification |
+| `FAESTEM2Verify256s(pk *[64]byte, msg []byte, sig *[25696]byte) bool` | PK: 64 B | 25,696 B | Constant-time 640-S-box `GF(2^256)` `QuickSilver` verification |
 | `FAESTEM2Keygen256f(seed *[64]byte) (pk [64]byte, sk [96]byte)` | 64 / 64 / 96 B | — | NIST Category 5 20-round `2-EM` (`tau = 32`) |
 | `FAESTEM2Sign256f(sk *[96]byte, msg []byte, optRand *[32]byte) (sig [30368]byte)` | SK: 96 B | 30,368 B | NIST Category 5 `2-EM` fast signing profile |
-| `FAESTEM2Verify256f(pk *[64]byte, msg []byte, sig *[30368]byte) bool` | PK: 64 B | 30,368 B | Constant-time 640-S-box `QuickSilver` verification |
+| `FAESTEM2Verify256f(pk *[64]byte, msg []byte, sig *[30368]byte) bool` | PK: 64 B | 30,368 B | Constant-time 640-S-box `GF(2^256)` `QuickSilver` verification |
 
 ---
 

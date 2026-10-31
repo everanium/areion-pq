@@ -2570,6 +2570,113 @@ func qsEvalSBoxGate(x, s *qsByteWire, isVerifier bool, delta, chi, a1Acc, a0OrBV
 	qsEvalBilinearConstraint(&w, x, &y, isVerifier, delta, chi, a1Acc, a0OrBVAcc)
 }
 
+func qsEvalBilinearConstraint256(
+	a0, a1, b0, b1, c0, c1 *qsByteWire,
+	isVerifier bool,
+	delta, chi, a1Acc, a0OrBVAcc *[32]byte,
+) {
+	var dLo, dHi, dMid [15][16]byte
+	var pLo, pHi, pMid [8][16]byte
+	var aSum, bSum [8][16]byte
+	qsMul8(&dLo, &a0.tag, &b0.tag)
+	qsReduceGF256Tags(&pLo, &dLo)
+	qsMul8(&dHi, &a1.tag, &b1.tag)
+	qsReduceGF256Tags(&pHi, &dHi)
+	for i := 0; i < 8; i++ {
+		xor16(&aSum[i], &a0.tag[i], &a1.tag[i])
+		xor16(&bSum[i], &b0.tag[i], &b1.tag[i])
+	}
+	qsMul8(&dMid, &aSum, &bSum)
+	qsReduceGF256Tags(&pMid, &dMid)
+
+	alpha := [16]byte{0x87}
+	var pHiAlpha [16]byte
+	var p0_256 [32]byte
+
+	if !isVerifier {
+		var d1Lo, d1Hi [15][16]byte
+		var p1Lo, p1Hi [8][16]byte
+		var d1Lo0, d1Lo1, d1Hi0, d1Hi1 [15]uint64
+		var bMask, b0Lo, b0Hi, b1Lo, b1Hi [8]uint64
+		for j := 0; j < 8; j++ {
+			bMask[j] = -uint64((b0.val >> j) & 1)
+			b0Lo[j] = binary.LittleEndian.Uint64(b0.tag[j][0:8])
+			b0Hi[j] = binary.LittleEndian.Uint64(b0.tag[j][8:16])
+			b1Lo[j] = binary.LittleEndian.Uint64(b1.tag[j][0:8])
+			b1Hi[j] = binary.LittleEndian.Uint64(b1.tag[j][8:16])
+		}
+		for i := 0; i < 8; i++ {
+			aiMask := -uint64((a0.val >> i) & 1)
+			a0iLo := binary.LittleEndian.Uint64(a0.tag[i][0:8])
+			a0iHi := binary.LittleEndian.Uint64(a0.tag[i][8:16])
+			a1iLo := binary.LittleEndian.Uint64(a1.tag[i][0:8])
+			a1iHi := binary.LittleEndian.Uint64(a1.tag[i][8:16])
+			for j := 0; j < 8; j++ {
+				bjMask := bMask[j]
+				d1Lo0[i+j] ^= (b0Lo[j] & aiMask) ^ (a0iLo & bjMask)
+				d1Lo1[i+j] ^= (b0Hi[j] & aiMask) ^ (a0iHi & bjMask)
+				d1Hi0[i+j] ^= (b1Lo[j] & aiMask) ^ (a1iLo & bjMask)
+				d1Hi1[i+j] ^= (b1Hi[j] & aiMask) ^ (a1iHi & bjMask)
+			}
+		}
+		for k := 0; k < 15; k++ {
+			binary.LittleEndian.PutUint64(d1Lo[k][0:8], d1Lo0[k])
+			binary.LittleEndian.PutUint64(d1Lo[k][8:16], d1Lo1[k])
+			binary.LittleEndian.PutUint64(d1Hi[k][0:8], d1Hi0[k])
+			binary.LittleEndian.PutUint64(d1Hi[k][8:16], d1Hi1[k])
+		}
+		qsReduceGF256Tags(&p1Lo, &d1Lo)
+		qsReduceGF256Tags(&p1Hi, &d1Hi)
+
+		var p1_256 [32]byte
+		for m := 0; m < 8; m++ {
+			dispatchGF128MulNoWipe(&pHiAlpha, &pHi[m], &alpha)
+			xor16((*[16]byte)(p0_256[0:16]), &pLo[m], &pHiAlpha)
+			xor16((*[16]byte)(p0_256[16:32]), &pMid[m], &pLo[m])
+
+			xor16((*[16]byte)(p1_256[0:16]), &p1Lo[m], &c0.tag[m])
+			xor16((*[16]byte)(p1_256[16:32]), &p1Hi[m], &c1.tag[m])
+
+			gf256FieldMulBody(a1Acc, a1Acc, chi)
+			xor32(a1Acc, a1Acc, &p1_256)
+
+			gf256FieldMulBody(a0OrBVAcc, a0OrBVAcc, chi)
+			xor32(a0OrBVAcc, a0OrBVAcc, &p0_256)
+		}
+	} else {
+		var cTag256, cDelta256 [32]byte
+		for m := 0; m < 8; m++ {
+			dispatchGF128MulNoWipe(&pHiAlpha, &pHi[m], &alpha)
+			xor16((*[16]byte)(p0_256[0:16]), &pLo[m], &pHiAlpha)
+			xor16((*[16]byte)(p0_256[16:32]), &pMid[m], &pLo[m])
+
+			copy(cTag256[0:16], c0.tag[m][:])
+			copy(cTag256[16:32], c1.tag[m][:])
+			gf256FieldMulBody(&cDelta256, &cTag256, delta)
+			xor32(&p0_256, &p0_256, &cDelta256)
+
+			gf256FieldMulBody(a0OrBVAcc, a0OrBVAcc, chi)
+			xor32(a0OrBVAcc, a0OrBVAcc, &p0_256)
+		}
+	}
+}
+
+func qsEvalSBoxGate256(
+	x0, x1, s0, s1 *qsByteWire,
+	isVerifier bool,
+	delta, chi, a1Acc, a0OrBVAcc *[32]byte,
+) {
+	var u0, u1, y0, y1, w0, w1 qsByteWire
+	qsSqGF256Wire(&u0, x0)
+	qsSqGF256Wire(&u1, x1)
+	qsAffineInvWire(&y0, s0, isVerifier, (*[16]byte)(delta[0:16]))
+	qsAffineInvWire(&y1, s1, isVerifier, (*[16]byte)(delta[16:32]))
+	qsSqGF256Wire(&w0, &y0)
+	qsSqGF256Wire(&w1, &y1)
+	qsEvalBilinearConstraint256(&u0, &u1, &y0, &y1, x0, x1, isVerifier, delta, chi, a1Acc, a0OrBVAcc)
+	qsEvalBilinearConstraint256(&w0, &w1, x0, x1, &y0, &y1, isVerifier, delta, chi, a1Acc, a0OrBVAcc)
+}
+
 func qsMulOrtho128Wires(out *[16]qsByteWire, tHalf *[16]byte, kWires *[16]qsByteWire) {
 	clear(out[:])
 	// Build the 128 values P_b = GF128Mul(tHalf, x^b) for b = 0..127.
@@ -2746,6 +2853,189 @@ func faestEvalQuickSilverLane(
 	return a1Acc, a0OrBVAcc
 }
 
+func faestEvalQuickSilver256(
+	p *faestParams,
+	mPub, tPub, cPub *[32]byte,
+	wFull []byte,
+	bitTags0, bitTags1 [][16]byte, // each length 8 * p.lExt
+	isVerifier bool,
+	delta, chi *[32]byte,
+) (a1Acc, a0OrBVAcc [32]byte) {
+	delta0 := (*[16]byte)(delta[0:16])
+	delta1 := (*[16]byte)(delta[16:32])
+
+	var k1Wires0, k1Wires1, k2Wires0, k2Wires1 [32]qsByteWire
+	if p.kBytes == 16 {
+		for i := 0; i < 16; i++ {
+			qsWireFromWitnessByte(&k1Wires0[i], i, wFull, bitTags0, isVerifier)
+			k1Wires0[16+i] = k1Wires0[i]
+			qsWireFromWitnessByte(&k1Wires1[i], i, wFull, bitTags1, isVerifier)
+			k1Wires1[16+i] = k1Wires1[i]
+		}
+	} else {
+		for i := 0; i < 32; i++ {
+			qsWireFromWitnessByte(&k1Wires0[i], i, wFull, bitTags0, isVerifier)
+			qsWireFromWitnessByte(&k1Wires1[i], i, wFull, bitTags1, isVerifier)
+		}
+	}
+
+	if !p.isEM2 {
+		qsMulOrtho128Wires((*[16]qsByteWire)(k2Wires0[0:16]), (*[16]byte)(tPub[0:16]), (*[16]qsByteWire)(k1Wires0[0:16]))
+		qsMulOrtho128Wires((*[16]qsByteWire)(k2Wires0[16:32]), (*[16]byte)(tPub[16:32]), (*[16]qsByteWire)(k1Wires0[16:32]))
+		qsMulOrtho128Wires((*[16]qsByteWire)(k2Wires1[0:16]), (*[16]byte)(tPub[0:16]), (*[16]qsByteWire)(k1Wires1[0:16]))
+		qsMulOrtho128Wires((*[16]qsByteWire)(k2Wires1[16:32]), (*[16]byte)(tPub[16:32]), (*[16]qsByteWire)(k1Wires1[16:32]))
+	} else {
+		for i := 0; i < 16; i++ {
+			k2Wires0[i] = k1Wires0[16+i]
+			qsXorByteWire(&k2Wires0[16+i], &k1Wires0[i], &k1Wires0[16+i])
+			k2Wires1[i] = k1Wires1[16+i]
+			qsXorByteWire(&k2Wires1[16+i], &k1Wires1[i], &k1Wires1[16+i])
+		}
+	}
+
+	// Evaluate P1 rounds
+	var x0_0, x1_0, x0_1, x1_1 [16]qsByteWire
+	for i := 0; i < 16; i++ {
+		qsAddConstByte(&x0_0[i], &k1Wires0[i], mPub[i], isVerifier, delta0)
+		qsAddConstByte(&x1_0[i], &k1Wires0[16+i], mPub[16+i], isVerifier, delta0)
+		qsAddConstByte(&x0_1[i], &k1Wires1[i], mPub[i], isVerifier, delta1)
+		qsAddConstByte(&x1_1[i], &k1Wires1[16+i], mPub[16+i], isVerifier, delta1)
+	}
+
+	p1Rounds := 10
+	if p.isEM2 {
+		p1Rounds = 9
+	}
+
+	var a0, b0, a1, b1 *[16]qsByteWire
+	var aNext0, bNext0, s1_0, mc0, x2_0, t0, imc0, s2_0 [16]qsByteWire
+	var aNext1, bNext1, s1_1, mc1, x2_1, t1, imc1, s2_1 [16]qsByteWire
+
+	for r := 0; r < p1Rounds; r++ {
+		if r%2 == 0 {
+			a0, b0 = &x0_0, &x1_0
+			a1, b1 = &x0_1, &x1_1
+		} else {
+			a0, b0 = &x1_0, &x0_0
+			a1, b1 = &x1_1, &x0_1
+		}
+		if r < 9 {
+			base := p.kBytes + 32*r
+			for i := 0; i < 16; i++ {
+				qsWireFromWitnessByte(&aNext0[i], base+i, wFull, bitTags0, isVerifier)
+				qsWireFromWitnessByte(&bNext0[i], base+16+i, wFull, bitTags0, isVerifier)
+				qsWireFromWitnessByte(&aNext1[i], base+i, wFull, bitTags1, isVerifier)
+				qsWireFromWitnessByte(&bNext1[i], base+16+i, wFull, bitTags1, isVerifier)
+			}
+		} else {
+			for i := 0; i < 16; i++ {
+				qsAddConstByte(&aNext0[i], &k2Wires0[16+i], cPub[16+i], isVerifier, delta0)
+				qsAddConstByte(&bNext0[i], &k2Wires0[i], cPub[i], isVerifier, delta0)
+				qsAddConstByte(&aNext1[i], &k2Wires1[16+i], cPub[16+i], isVerifier, delta1)
+				qsAddConstByte(&bNext1[i], &k2Wires1[i], cPub[i], isVerifier, delta1)
+			}
+		}
+
+		qsInvShiftRowsBlock(&s1_0, &aNext0)
+		qsInvShiftRowsBlock(&s1_1, &aNext1)
+		for j := 0; j < 16; j++ {
+			qsEvalSBoxGate256(&a0[j], &a1[j], &s1_0[j], &s1_1[j], isVerifier, delta, chi, &a1Acc, &a0OrBVAcc)
+		}
+
+		qsMixColumnsBlock(&mc0, &aNext0)
+		qsMixColumnsBlock(&mc1, &aNext1)
+		for j := 0; j < 16; j++ {
+			qsAddConstByte(&x2_0[j], &mc0[j], roundConstantsP1[r][j], isVerifier, delta0)
+			qsXorByteWire(&t0[j], &b0[j], &bNext0[j])
+			qsAddConstByte(&x2_1[j], &mc1[j], roundConstantsP1[r][j], isVerifier, delta1)
+			qsXorByteWire(&t1[j], &b1[j], &bNext1[j])
+		}
+		qsInvMixColumnsBlock(&imc0, &t0)
+		qsInvShiftRowsBlock(&s2_0, &imc0)
+		qsInvMixColumnsBlock(&imc1, &t1)
+		qsInvShiftRowsBlock(&s2_1, &imc1)
+		for j := 0; j < 16; j++ {
+			qsEvalSBoxGate256(&x2_0[j], &x2_1[j], &s2_0[j], &s2_1[j], isVerifier, delta, chi, &a1Acc, &a0OrBVAcc)
+		}
+
+		*a0 = aNext0
+		*b0 = bNext0
+		*a1 = aNext1
+		*b1 = bNext1
+	}
+
+	if p.isEM2 {
+		// Evaluate P2 rounds 1..9 from w_p2[0:288] and final state C ^ K1 ^ K2
+		baseP2 := p.kBytes + 288
+		for i := 0; i < 16; i++ {
+			qsWireFromWitnessByte(&x0_0[i], baseP2+i, wFull, bitTags0, isVerifier)
+			qsWireFromWitnessByte(&x1_0[i], baseP2+16+i, wFull, bitTags0, isVerifier)
+			qsWireFromWitnessByte(&x0_1[i], baseP2+i, wFull, bitTags1, isVerifier)
+			qsWireFromWitnessByte(&x1_1[i], baseP2+16+i, wFull, bitTags1, isVerifier)
+		}
+		var k12Hi0, k12Lo0, k12Hi1, k12Lo1 qsByteWire
+		for r := 1; r < 10; r++ {
+			if r%2 == 0 {
+				a0, b0 = &x0_0, &x1_0
+				a1, b1 = &x0_1, &x1_1
+			} else {
+				a0, b0 = &x1_0, &x0_0
+				a1, b1 = &x1_1, &x0_1
+			}
+			if r < 9 {
+				base := baseP2 + 32*r
+				for i := 0; i < 16; i++ {
+					qsWireFromWitnessByte(&aNext0[i], base+i, wFull, bitTags0, isVerifier)
+					qsWireFromWitnessByte(&bNext0[i], base+16+i, wFull, bitTags0, isVerifier)
+					qsWireFromWitnessByte(&aNext1[i], base+i, wFull, bitTags1, isVerifier)
+					qsWireFromWitnessByte(&bNext1[i], base+16+i, wFull, bitTags1, isVerifier)
+				}
+			} else {
+				for i := 0; i < 16; i++ {
+					qsXorByteWire(&k12Hi0, &k1Wires0[16+i], &k2Wires0[16+i])
+					qsXorByteWire(&k12Lo0, &k1Wires0[i], &k2Wires0[i])
+					qsAddConstByte(&aNext0[i], &k12Hi0, cPub[16+i], isVerifier, delta0)
+					qsAddConstByte(&bNext0[i], &k12Lo0, cPub[i], isVerifier, delta0)
+
+					qsXorByteWire(&k12Hi1, &k1Wires1[16+i], &k2Wires1[16+i])
+					qsXorByteWire(&k12Lo1, &k1Wires1[i], &k2Wires1[i])
+					qsAddConstByte(&aNext1[i], &k12Hi1, cPub[16+i], isVerifier, delta1)
+					qsAddConstByte(&bNext1[i], &k12Lo1, cPub[i], isVerifier, delta1)
+				}
+			}
+
+			qsInvShiftRowsBlock(&s1_0, &aNext0)
+			qsInvShiftRowsBlock(&s1_1, &aNext1)
+			for j := 0; j < 16; j++ {
+				qsEvalSBoxGate256(&a0[j], &a1[j], &s1_0[j], &s1_1[j], isVerifier, delta, chi, &a1Acc, &a0OrBVAcc)
+			}
+
+			qsMixColumnsBlock(&mc0, &aNext0)
+			qsMixColumnsBlock(&mc1, &aNext1)
+			for j := 0; j < 16; j++ {
+				qsAddConstByte(&x2_0[j], &mc0[j], roundConstantsP2[r][j], isVerifier, delta0)
+				qsXorByteWire(&t0[j], &b0[j], &bNext0[j])
+				qsAddConstByte(&x2_1[j], &mc1[j], roundConstantsP2[r][j], isVerifier, delta1)
+				qsXorByteWire(&t1[j], &b1[j], &bNext1[j])
+			}
+			qsInvMixColumnsBlock(&imc0, &t0)
+			qsInvShiftRowsBlock(&s2_0, &imc0)
+			qsInvMixColumnsBlock(&imc1, &t1)
+			qsInvShiftRowsBlock(&s2_1, &imc1)
+			for j := 0; j < 16; j++ {
+				qsEvalSBoxGate256(&x2_0[j], &x2_1[j], &s2_0[j], &s2_1[j], isVerifier, delta, chi, &a1Acc, &a0OrBVAcc)
+			}
+
+			*a0 = aNext0
+			*b0 = bNext0
+			*a1 = aNext1
+			*b1 = bNext1
+		}
+	}
+
+	return a1Acc, a0OrBVAcc
+}
+
 func faestFoldMask128(bitTags [][16]byte, startBit int) (mask [16]byte) {
 	var prod, basis [16]byte
 	for m := 0; m < 128; m++ {
@@ -2755,6 +3045,45 @@ func faestFoldMask128(bitTags [][16]byte, startBit int) (mask [16]byte) {
 		basis[m/8] = 0
 	}
 	return mask
+}
+
+func faestFoldMask256(bitTags0, bitTags1 [][16]byte, startBit int) (mask [32]byte) {
+	var prod, basis, tag [32]byte
+	for m := 0; m < 256; m++ {
+		copy(tag[0:16], bitTags0[startBit+m][:])
+		copy(tag[16:32], bitTags1[startBit+m][:])
+		basis[m/8] = 1 << (m % 8)
+		gf256FieldMulBody(&prod, &tag, &basis)
+		xor32(&mask, &mask, &prod)
+		basis[m/8] = 0
+	}
+	clear(prod[:])
+	clear(tag[:])
+	runtime.KeepAlive(&prod)
+	runtime.KeepAlive(&tag)
+	return mask
+}
+
+func faestTransposeRows(bitTags [][16]byte, rows *[128][640]byte, lExt int) {
+	clear(bitTags)
+	for k := 0; k < 128; k++ {
+		row := &rows[k]
+		kByte := k / 8
+		kShift := uint(k % 8)
+		for byteIdx := 0; byteIdx < lExt; byteIdx++ {
+			rb := row[byteIdx]
+			baseBit := 8 * byteIdx
+			tags := bitTags[baseBit : baseBit+8 : baseBit+8]
+			tags[0][kByte] |= ((rb >> 0) & 1) << kShift
+			tags[1][kByte] |= ((rb >> 1) & 1) << kShift
+			tags[2][kByte] |= ((rb >> 2) & 1) << kShift
+			tags[3][kByte] |= ((rb >> 3) & 1) << kShift
+			tags[4][kByte] |= ((rb >> 4) & 1) << kShift
+			tags[5][kByte] |= ((rb >> 5) & 1) << kShift
+			tags[6][kByte] |= ((rb >> 6) & 1) << kShift
+			tags[7][kByte] |= ((rb >> 7) & 1) << kShift
+		}
+	}
 }
 
 //go:noinline
@@ -2905,48 +3234,24 @@ func faestSignCoreBody(p *faestParams, sk, msg, optRand, sigOut []byte) {
 	for t := 1; t < p.tau; t++ {
 		fsBuf = append(fsBuf, cTrees[t][0:p.lExt]...)
 	}
-	var chi [16]byte
-	kdfExpandBody(fsBuf, []byte("FAEST-FS-CHI"), chi[:])
+	var chi [32]byte
+	kdfExpandBody(fsBuf, []byte("FAEST-FS-CHI"), chi[0:p.lambda])
 	chi[0] |= 0x01
 
-	// Transpose qRows into bit tags per 128-bit lane and run QuickSilver
-	numLanes := p.lambda / 16
+	// Transpose qRows into bit tags and run QuickSilver over GF(2^{8*lambda})
 	var qsU, wPoly [32]byte
-	var bitTagsBuf [8 * 640][16]byte
-	bitTags := bitTagsBuf[:8*p.lExt]
-	var zeroDelta [16]byte
+	var bitTagsBuf0 [8 * 640][16]byte
+	bitTags0 := bitTagsBuf0[:8*p.lExt]
 
-	for lane := 0; lane < numLanes; lane++ {
-		clear(bitTags)
-		qRowsLane := &qRows0
-		if lane == 1 {
-			qRowsLane = &qRows1
-		}
-		for k := 0; k < 128; k++ {
-			row := &qRowsLane[k]
-			kByte := k / 8
-			kShift := uint(k % 8)
-			for byteIdx := 0; byteIdx < p.lExt; byteIdx++ {
-				rb := row[byteIdx]
-				baseBit := 8 * byteIdx
-				tags := bitTags[baseBit : baseBit+8 : baseBit+8]
-				tags[0][kByte] |= ((rb >> 0) & 1) << kShift
-				tags[1][kByte] |= ((rb >> 1) & 1) << kShift
-				tags[2][kByte] |= ((rb >> 2) & 1) << kShift
-				tags[3][kByte] |= ((rb >> 3) & 1) << kShift
-				tags[4][kByte] |= ((rb >> 4) & 1) << kShift
-				tags[5][kByte] |= ((rb >> 5) & 1) << kShift
-				tags[6][kByte] |= ((rb >> 6) & 1) << kShift
-				tags[7][kByte] |= ((rb >> 7) & 1) << kShift
-			}
-		}
-		a1Acc, a0Acc := faestEvalQuickSilverLane(p, &mPub, &tPub, &cPub, wFull[0:p.lBytes], bitTags, false, &zeroDelta, &chi)
-		qMask := faestFoldMask128(bitTags, 8*p.lBytes+128*lane)
+	if p.lambda == 16 {
+		faestTransposeRows(bitTags0, &qRows0, p.lExt)
+		var zeroDelta16 [16]byte
+		a1Acc, a0Acc := faestEvalQuickSilverLane(p, &mPub, &tPub, &cPub, wFull[0:p.lBytes], bitTags0, false, &zeroDelta16, (*[16]byte)(chi[0:16]))
+		qMask := faestFoldMask128(bitTags0, 8*p.lBytes)
 		for i := 0; i < 16; i++ {
-			uMaskByte := u0[p.lBytes+16*lane+i]
-			qsU[16*lane+i] = a1Acc[i] ^ uMaskByte
-			dExt[p.lBytes+16*lane+i] = qsU[16*lane+i]
-			wPoly[16*lane+i] = a0Acc[i] ^ qMask[i]
+			qsU[i] = a1Acc[i] ^ u0[p.lBytes+i]
+			dExt[p.lBytes+i] = qsU[i]
+			wPoly[i] = a0Acc[i] ^ qMask[i]
 		}
 		clear(a1Acc[:])
 		clear(a0Acc[:])
@@ -2954,15 +3259,36 @@ func faestSignCoreBody(p *faestParams, sk, msg, optRand, sigOut []byte) {
 		runtime.KeepAlive(&a1Acc)
 		runtime.KeepAlive(&a0Acc)
 		runtime.KeepAlive(&qMask)
+	} else {
+		var bitTagsBuf1 [8 * 640][16]byte
+		bitTags1 := bitTagsBuf1[:8*p.lExt]
+		faestTransposeRows(bitTags0, &qRows0, p.lExt)
+		faestTransposeRows(bitTags1, &qRows1, p.lExt)
+		var zeroDelta32 [32]byte
+		a1Acc, a0Acc := faestEvalQuickSilver256(p, &mPub, &tPub, &cPub, wFull[0:p.lBytes], bitTags0, bitTags1, false, &zeroDelta32, &chi)
+		qMask256 := faestFoldMask256(bitTags0, bitTags1, 8*p.lBytes)
+		for i := 0; i < 32; i++ {
+			qsU[i] = a1Acc[i] ^ u0[p.lBytes+i]
+			dExt[p.lBytes+i] = qsU[i]
+			wPoly[i] = a0Acc[i] ^ qMask256[i]
+		}
+		clear(a1Acc[:])
+		clear(a0Acc[:])
+		clear(qMask256[:])
+		clear(bitTagsBuf1[:])
+		runtime.KeepAlive(&a1Acc)
+		runtime.KeepAlive(&a0Acc)
+		runtime.KeepAlive(&qMask256)
+		runtime.KeepAlive(&bitTagsBuf1)
 	}
 
 	// Derive opening challenge Delta
-	var deltaIn [16 + 32 + 32]byte
-	copy(deltaIn[0:16], chi[:])
-	copy(deltaIn[16:16+p.lambda], qsU[0:p.lambda])
-	copy(deltaIn[16+p.lambda:16+2*p.lambda], wPoly[0:p.lambda])
+	var deltaIn [96]byte
+	copy(deltaIn[0:p.lambda], chi[0:p.lambda])
+	copy(deltaIn[p.lambda:2*p.lambda], qsU[0:p.lambda])
+	copy(deltaIn[2*p.lambda:3*p.lambda], wPoly[0:p.lambda])
 	var delta [32]byte
-	kdfExpandBody(deltaIn[0:16+2*p.lambda], salt[:], delta[0:p.lambda])
+	kdfExpandBody(deltaIn[0:3*p.lambda], salt[:], delta[0:p.lambda])
 
 	// Pack signature:
 	// [0 : 32] -> salt
@@ -3038,7 +3364,7 @@ func faestSignCoreBody(p *faestParams, sk, msg, optRand, sigOut []byte) {
 	clear(chi[:])
 	clear(qsU[:])
 	clear(wPoly[:])
-	clear(bitTagsBuf[:])
+	clear(bitTagsBuf0[:])
 	clear(deltaIn[:])
 	clear(delta[:])
 	clear(pathNode[:])
@@ -3068,7 +3394,7 @@ func faestSignCoreBody(p *faestParams, sk, msg, optRand, sigOut []byte) {
 	runtime.KeepAlive(&chi)
 	runtime.KeepAlive(&qsU)
 	runtime.KeepAlive(&wPoly)
-	runtime.KeepAlive(&bitTagsBuf)
+	runtime.KeepAlive(&bitTagsBuf0)
 	runtime.KeepAlive(&deltaIn)
 	runtime.KeepAlive(&delta)
 	runtime.KeepAlive(&pathNode)
@@ -3208,60 +3534,57 @@ func faestVerifyCoreBody(p *faestParams, pk, msg, sig []byte) bool {
 	}
 	fsBuf = append(fsBuf, dWitness...)
 	fsBuf = append(fsBuf, sig[cOff:sibOff]...)
-	var chi [16]byte
-	kdfExpandBody(fsBuf, []byte("FAEST-FS-CHI"), chi[:])
+	var chi [32]byte
+	kdfExpandBody(fsBuf, []byte("FAEST-FS-CHI"), chi[0:p.lambda])
 	chi[0] |= 0x01
 
-	numLanes := p.lambda / 16
 	var wVerif [32]byte
-	var bitTagsBuf [8 * 640][16]byte
-	bitTags := bitTagsBuf[:8*p.lExt]
+	var bitTagsBuf0 [8 * 640][16]byte
+	bitTags0 := bitTagsBuf0[:8*p.lExt]
 
-	for lane := 0; lane < numLanes; lane++ {
-		clear(bitTags)
-		vRowsLane := &vRows0
-		if lane == 1 {
-			vRowsLane = &vRows1
-		}
-		for k := 0; k < 128; k++ {
-			row := &vRowsLane[k]
-			kByte := k / 8
-			kShift := uint(k % 8)
-			for byteIdx := 0; byteIdx < p.lExt; byteIdx++ {
-				rb := row[byteIdx]
-				baseBit := 8 * byteIdx
-				tags := bitTags[baseBit : baseBit+8 : baseBit+8]
-				tags[0][kByte] |= ((rb >> 0) & 1) << kShift
-				tags[1][kByte] |= ((rb >> 1) & 1) << kShift
-				tags[2][kByte] |= ((rb >> 2) & 1) << kShift
-				tags[3][kByte] |= ((rb >> 3) & 1) << kShift
-				tags[4][kByte] |= ((rb >> 4) & 1) << kShift
-				tags[5][kByte] |= ((rb >> 5) & 1) << kShift
-				tags[6][kByte] |= ((rb >> 6) & 1) << kShift
-				tags[7][kByte] |= ((rb >> 7) & 1) << kShift
-			}
-		}
-		var deltaLane [16]byte
-		copy(deltaLane[:], deltaSig[16*lane:16*(lane+1)])
-		_, bvAcc := faestEvalQuickSilverLane(p, &mPub, &tPub, &cPub, nil, bitTags, true, &deltaLane, &chi)
-		vMask := faestFoldMask128(bitTags, 8*p.lBytes+128*lane)
+	if p.lambda == 16 {
+		faestTransposeRows(bitTags0, &vRows0, p.lExt)
+		var delta16 [16]byte
+		copy(delta16[:], deltaSig[0:16])
+		_, bvAcc := faestEvalQuickSilverLane(p, &mPub, &tPub, &cPub, nil, bitTags0, true, &delta16, (*[16]byte)(chi[0:16]))
+		vMask := faestFoldMask128(bitTags0, 8*p.lBytes)
 		for i := 0; i < 16; i++ {
-			wVerif[16*lane+i] = bvAcc[i] ^ vMask[i]
+			wVerif[i] = bvAcc[i] ^ vMask[i]
 		}
-		clear(deltaLane[:])
+		clear(delta16[:])
 		clear(bvAcc[:])
 		clear(vMask[:])
-		runtime.KeepAlive(&deltaLane)
+		runtime.KeepAlive(&delta16)
 		runtime.KeepAlive(&bvAcc)
 		runtime.KeepAlive(&vMask)
+	} else {
+		var bitTagsBuf1 [8 * 640][16]byte
+		bitTags1 := bitTagsBuf1[:8*p.lExt]
+		faestTransposeRows(bitTags0, &vRows0, p.lExt)
+		faestTransposeRows(bitTags1, &vRows1, p.lExt)
+		var delta32 [32]byte
+		copy(delta32[:], deltaSig[0:32])
+		_, bvAcc := faestEvalQuickSilver256(p, &mPub, &tPub, &cPub, nil, bitTags0, bitTags1, true, &delta32, &chi)
+		vMask256 := faestFoldMask256(bitTags0, bitTags1, 8*p.lBytes)
+		for i := 0; i < 32; i++ {
+			wVerif[i] = bvAcc[i] ^ vMask256[i]
+		}
+		clear(delta32[:])
+		clear(bvAcc[:])
+		clear(vMask256[:])
+		clear(bitTagsBuf1[:])
+		runtime.KeepAlive(&delta32)
+		runtime.KeepAlive(&bvAcc)
+		runtime.KeepAlive(&vMask256)
+		runtime.KeepAlive(&bitTagsBuf1)
 	}
 
-	var deltaIn [16 + 32 + 32]byte
-	copy(deltaIn[0:16], chi[:])
-	copy(deltaIn[16:16+p.lambda], qsU)
-	copy(deltaIn[16+p.lambda:16+2*p.lambda], wVerif[0:p.lambda])
+	var deltaIn [96]byte
+	copy(deltaIn[0:p.lambda], chi[0:p.lambda])
+	copy(deltaIn[p.lambda:2*p.lambda], qsU)
+	copy(deltaIn[2*p.lambda:3*p.lambda], wVerif[0:p.lambda])
 	var deltaPrime [32]byte
-	kdfExpandBody(deltaIn[0:16+2*p.lambda], salt[:], deltaPrime[0:p.lambda])
+	kdfExpandBody(deltaIn[0:3*p.lambda], salt[:], deltaPrime[0:p.lambda])
 
 	ok := subtle.ConstantTimeCompare(deltaSig, deltaPrime[0:p.lambda])
 	if endOff := comOff + p.tau*p.lambda; endOff < p.sigSize {
@@ -3288,7 +3611,7 @@ func faestVerifyCoreBody(p *faestParams, pk, msg, sig []byte) bool {
 	clear(fsStack[:])
 	clear(chi[:])
 	clear(wVerif[:])
-	clear(bitTagsBuf[:])
+	clear(bitTagsBuf0[:])
 	clear(deltaIn[:])
 	clear(deltaPrime[:])
 	runtime.KeepAlive(&pSeed)
@@ -3306,7 +3629,7 @@ func faestVerifyCoreBody(p *faestParams, pk, msg, sig []byte) bool {
 	runtime.KeepAlive(&fsStack)
 	runtime.KeepAlive(&chi)
 	runtime.KeepAlive(&wVerif)
-	runtime.KeepAlive(&bitTagsBuf)
+	runtime.KeepAlive(&bitTagsBuf0)
 	runtime.KeepAlive(&deltaIn)
 	runtime.KeepAlive(&deltaPrime)
 	return ok == 1

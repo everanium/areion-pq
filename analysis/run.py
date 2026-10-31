@@ -172,7 +172,7 @@ CHECKS = {
         c_vole,
         True,
         False,
-        "GF(2^128) QuickSilver VOLE gate check & TEM2-SIV tag sensitivity / forgery zeroization (H)",
+        "GF(2^128) & GF(2^256) QuickSilver VOLE gate check & TEM2-SIV tag sensitivity / forgery zeroization (H)",
         "4 s",
         "1 s",
     ),

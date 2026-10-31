@@ -14,3 +14,6 @@ C2 alone (Sq(Y)*X ^ Y == 0) false accepts:     255 / 65280 (1 spurious S=0x63 pe
 --- QuickSilver GF(2^128) VOLE Homomorphic Gate Identity ---
 Valid pairs satisfying B_V == A0 ^ A1*Delta:   256 / 256
 Random invalid pairs rejected (err = C*Delta^2):1000 / 1000
+--- QuickSilver GF(2^256) VOLE Homomorphic Gate Identity ---
+Valid pairs satisfying B_V == A0 ^ A1*Delta:   256 / 256
+Random invalid pairs rejected (err = C*Delta^2):1000 / 1000

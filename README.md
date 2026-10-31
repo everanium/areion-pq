@@ -18,7 +18,7 @@ Built on **[`everanium/areion`](https://github.com/everanium/areion)**. Companio
 
 `areion-pq` constructs post-quantum signatures, key derivation, and wide-block authenticated encryption directly over hardware-accelerated `Areion-256` (10-round) and `Areion-512` (15-round) permutations ([Isobe et al., TCHES 2023](https://doi.org/10.46586/tches.v2023.i2.115-154); [ePrint 2023/794](https://eprint.iacr.org/2023/794)):
 
-- **Track 1 — `FAEST-Areion` (`VOLE-in-the-Head` Zero-Knowledge Signatures)**: Exploits the 2-branch Feistel structure of 10-round `Areion-256` so that Round 9 requires **zero committed witness bytes** (`32` free S-boxes out of `320` total S-boxes; `288` witness bytes = `2,304` bits for `Areion-256`, and `576` witness bytes = `4,608` bits for 20-round `Areion-EM2-256`). Every S-box transition `(X, S)` is verified over `GF(2^8)` via the coupled degree-2 bilinear equations `Sq(X) * Y ⊕ X = 0` and `Sq(Y) * X ⊕ Y = 0` (`Y = AffineInv(S)`), which achieve `100%` completeness (`256 / 256` valid pairs, including `(0x00, 0x63)`) and `100%` soundness (`65,280 / 65,280` invalid pairs rejected) under `QuickSilver` `GF(2^128)` polynomial authentication.
+- **Track 1 — `FAEST-Areion` (`VOLE-in-the-Head` Zero-Knowledge Signatures)**: Exploits the 2-branch Feistel structure of 10-round `Areion-256` so that Round 9 requires **zero committed witness bytes** (`32` free S-boxes out of `320` total S-boxes; `288` witness bytes = `2,304` bits for `Areion-256`, and `576` witness bytes = `4,608` bits for 20-round `Areion-EM2-256`). Every S-box transition `(X, S)` is verified over `GF(2^8)` via the coupled degree-2 bilinear equations `Sq(X) * Y ⊕ X = 0` and `Sq(Y) * X ⊕ Y = 0` (`Y = AffineInv(S)`), which achieve `100%` completeness (`256 / 256` valid pairs, including `(0x00, 0x63)`) and `100%` soundness (`65,280 / 65,280` invalid pairs rejected) under `QuickSilver` polynomial authentication over `GF(2^128)` (`FAEST-Areion-128{s,f}`, `128`-bit soundness) and over the quadratic extension field `GF(2^256) = GF(2^128)[Y] / (Y^2 + Y + alpha)` (`FAEST-Areion-256{s,f}` and `FAEST-Areion-EM2-256{s,f}`, `256`-bit soundness).
 - **Track 2 — `SLH-DSA-Areion` (`NIST FIPS 205` Stateless Hash-Based Signatures)**: Replaces sequential 64/80-round `SHA-2` and `SHAKE256` compression in `NIST FIPS 205` with single-call `DM512` (`60` hardware AES instructions per 64-byte compression), 4-way batched `SoEM256x4` address PRFs, and middle-tweak `TEMEncrypt256`, after a one-time seed expansion (`SLHExpandSeed128/256`). Clamped-capacity `DM512` (`SLHF256`, `SLHF128`, `SLHH128`) and middle-tweak `TEM` (`SLHFTEM256`) preserve full `256 / 256` tweak capacity rank and eliminate feed-forward tweak cancellation.
 - **Track 3 — `Areion-HPKE` & `Areion-TEM2-SIV` Wide-Block AEAD**: Combines `NIST FIPS 203` `ML-KEM-768` (`crypto/mlkem`), a domain-separated `DM512` + `SoEM512x4` sponge key derivation function (`KDFExpand`), and 512-bit wide-block Synthetic IV authenticated encryption (`TEM2SIVEncrypt` / `TEM2SIVDecrypt`) built from `SoEM512x4` tag authentication and 4-way `TEM2Encrypt512x4` / `TEM2Decrypt512x4` wide-block tweakable encryption (`2^341.3` classical / `2^170.7` quantum BBB security).
 - **Multi-Tier Hardware Dispatch & Portable Fallback**: Automatic runtime selection across `AVX-512 VAES + VPCLMULQDQ`, `AVX2 + VAES + VPCLMULQDQ`, `AVX + AES-NI + PCLMULQDQ (VEX)`, legacy `AES-NI + PCLMULQDQ`, `ARMv8 Crypto (AESE/AESMC + PMULL/PMULL2)`, and a constant-time 64-bit bitsliced software fallback (`purego`), verified at startup by `SelfTest()`.
@@ -81,13 +81,13 @@ S^(r,2) = InvShiftRows(InvMixColumns(B_r ⊕ B_next_r))
 ```
 In 20-round `FAEST-Areion-EM2-256`, committing `576` witness bytes (`288 B` for `P1` + `288 B` for `P2`) similarly determines all `640` S-boxes (`64` free S-boxes = `512` bits saved).
 
-#### Coupled Degree-2 `QuickSilver` S-Box Equations over `GF(2^8)`
+#### Coupled Degree-2 `QuickSilver` S-Box Equations over `GF(2^8)`, `GF(2^128)`, and `GF(2^256)`
 For every S-box input byte `X` and output byte `S = Affine(X^254)`, let `Y = GF256AffineInv(S) = X^254` in `GF(2^8) = GF(2)[z] / (z^8 + z^4 + z^3 + z + 1)` (`0x11B`). The naive relation `X * Y ⊕ 1 = 0` fails when `X = 0x00` (`S = 0x63`, `Y = 0x00`), whereas a single degree-2 relation `Sq(X) * Y ⊕ X = 0` admits `255` spurious solutions `(X = 0x00, S != 0x63)`. `areion-pq` enforces the coupled bilinear pair:
 ```text
 C1(X, S) = GF256Mul(GF256Sq(X), Y) ⊕ X = 0
 C2(X, S) = GF256Mul(GF256Sq(Y), X) ⊕ Y = 0
 ```
-Since `GF256Sq` and `GF256AffineInv` are `GF(2)`-linear on bit wires, `C1` and `C2` are quadratic (`degree 2`) in the committed VOLE bit tags and achieve `100%` completeness (`256 / 256` valid pairs) and `100%` soundness (`0 / 65,280` invalid pairs accepted; see [`analysis/README.md` (Section B)](analysis/README.md#b-quicksilver-gf28-degree-2-s-box-completeness-and-soundness)).
+Since `GF256Sq` and `GF256AffineInv` are `GF(2)`-linear on bit wires, `C1` and `C2` are quadratic (`degree 2`) in the committed VOLE bit tags and achieve `100%` completeness (`256 / 256` valid pairs) and `100%` soundness (`0 / 65,280` invalid pairs accepted; see [`analysis/README.md` (Section B)](analysis/README.md#b-quicksilver-gf28-degree-2-s-box-completeness-and-soundness)). The resulting bit-level quadratic constraints are accumulated via Horner's rule over `GF(2^128)` for `FAEST-Areion-128{s,f}` (`128`-bit soundness) and over `GF(2^256) = GF(2^128)[Y] / (Y^2 + Y + alpha)` (`alpha = 0x87`, via Karatsuba over `GF128Mul`) for `FAEST-Areion-256{s,f}` and `FAEST-Areion-EM2-256{s,f}` (`256`-bit soundness).
 
 #### Parameter Sets & Comparison with `FAEST-256` and `FAEST-EM-256` (`Rijndael-256`)
 
@@ -99,10 +99,11 @@ Since `GF256Sq` and `GF256AffineInv` are `GF(2)`-linear on bit wires, `C1` and `
 | **FAEST-Areion-256f** | 10r Areion-256 (MulOrtho256) | 320 (32 free) | 320 B (2,560 b) | 32 | 64 | 96 | **20,512** |
 | **FAEST-Areion-EM2-256s** | 20r Areion-EM2-256 (OrthoSigma256) | 640 (64 free) | 608 B (4,864 b) | 26 | 64 | 96 | **25,696** |
 | **FAEST-Areion-EM2-256f** | 20r Areion-EM2-256 (OrthoSigma256) | 640 (64 free) | 608 B (4,864 b) | 32 | 64 | 96 | **30,368** |
-| FAEST-EM-256 (NIST Round 2) | 14r Rijndael-256 | 448 (0 free) | 480 B (3,840 b) | 32 | 64 | 96 | ~25,100 |
-| FAEST-256 (NIST Round 2) | 2 × 14r AES-256 + KeySched | 500 (0 free) | 512 B (4,096 b) | 32 | 64 | 96 | ~26,700 |
+| FAEST-EM-256 (v1, degree-2) | 14r Rijndael-256 | 448 (32 / 0 free) | 448 / 480 B (3,584 / 3,840 b) | 32 | 64 | 96 | 23,796 / ~25,100 |
+| FAEST-256 (v1, degree-2) | 2 × 14r AES-256 + KeySched | 500 (0 free) | 512 B (4,096 b) | 32 | 64 | 96 | ~26,700 |
+| FAEST-EM-256 / FAEST-256 (v3.0.3, degree-3) | 14r Rijndael-256 / 2 × 14r AES-256 | 448 / 500 (2r compressed) | 224 / 276 B (1,792 / 2,208 b) | 32 | 64 | 96 | 18,084 / 20,856 |
 
-Compared to 14-round `Rijndael-256` (`FAEST-EM-256`, `480 B` witness) and `FAEST-256` (`512 B` witness), `FAEST-Areion-256{s,f}` reduces the committed witness length by **33.3%** and **37.5%** (`320 B` total: `32 B` key + `288 B` S-box witness) while executing without cross-lane `PSHUFB` / `VTBL` byte shuffles.
+Compared to 14-round `Rijndael-256` (`448` S-boxes; `448 B` / `480 B` degree-2 witness in `FAEST v1`) and `2 × 14r AES-256` (`500` S-boxes; `512 B` degree-2 witness in `FAEST v1`), `FAEST-Areion-256{s,f}` evaluates only `320` S-boxes (`32` free in Round 9), reducing the uncompressed degree-2 witness length by **28.6%–33.3%** and **37.5%** (`320 B` total: `32 B` key + `288 B` S-box witness) and achieving smaller signatures than `faest_256f` (`20,512 B` vs. `20,856 B` in `faest-ref v3.0.3`) without requiring degree-3 two-round witness compression or cross-lane `PSHUFB` / `VTBL` byte shuffles.
 
 ---
 
@@ -196,10 +197,10 @@ At package initialization, `areion-pq` probes CPU capabilities (`cpu_amd64.go`, 
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **`FAESTSign128f`** | 24.0 (41,627,565 ns) | 468.9 (2,132,651 ns) | 474.1 (2,109,097 ns) | 561.8 (1,780,050 ns) | 601.9 (1,661,286 ns) |
 | **`FAESTVerify128f`** | 24.3 (41,171,532 ns) | 484.2 (2,065,339 ns) | 498.2 (2,007,026 ns) | 585.1 (1,709,119 ns) | 613.0 (1,631,390 ns) |
-| **`FAESTSign256f`** | 9.9 (101,386,021 ns) | 213.7 (4,678,721 ns) | 219.6 (4,553,814 ns) | 252.4 (3,962,473 ns) | 256.7 (3,895,356 ns) |
-| **`FAESTVerify256f`** | 10.0 (99,520,527 ns) | 205.9 (4,855,831 ns) | 214.2 (4,668,638 ns) | 248.4 (4,026,063 ns) | 255.0 (3,922,018 ns) |
-| **`FAESTEM2Sign256f`** | 6.1 (164,492,853 ns) | 133.4 (7,493,555 ns) | 139.6 (7,162,906 ns) | 168.4 (5,938,608 ns) | 171.3 (5,838,666 ns) |
-| **`FAESTEM2Verify256f`** | 6.3 (157,608,214 ns) | 143.2 (6,983,940 ns) | 147.1 (6,797,889 ns) | 172.3 (5,804,005 ns) | 183.8 (5,441,289 ns) |
+| **`FAESTSign256f`** | 9.0 (111,504,889 ns) | 188.0 (5,320,113 ns) | 197.1 (5,072,913 ns) | 214.2 (4,669,397 ns) | 233.6 (4,281,059 ns) |
+| **`FAESTVerify256f`** | 8.6 (115,964,736 ns) | 193.6 (5,164,677 ns) | 192.7 (5,189,933 ns) | 230.6 (4,336,559 ns) | 231.3 (4,323,514 ns) |
+| **`FAESTEM2Sign256f`** | 5.6 (177,791,722 ns) | 116.8 (8,564,033 ns) | 114.8 (8,709,541 ns) | 131.3 (7,617,345 ns) | 138.5 (7,222,031 ns) |
+| **`FAESTEM2Verify256f`** | 5.7 (174,948,057 ns) | 131.2 (7,620,136 ns) | 129.5 (7,723,042 ns) | 146.4 (6,830,181 ns) | 157.1 (6,365,554 ns) |
 | **`SLHDSASign128f`** | 5.3 (187,608,144 ns) | 255.8 (3,908,998 ns) | 256.4 (3,899,936 ns) | 259.0 (3,860,871 ns) | 259.1 (3,859,648 ns) |
 | **`SLHDSAVerify128f`** | 91.3 (10,956,684 ns) | 4,085.1 (244,794 ns) | 4,150.1 (240,960 ns) | 4,189.8 (238,676 ns) | 4,126.1 (242,357 ns) |
 | **`SLHDSASign256f`** | 3.2 (311,451,177 ns) | 135.5 (7,382,384 ns) | 147.0 (6,804,559 ns) | 168.1 (5,950,174 ns) | 160.8 (6,218,220 ns) |
@@ -207,7 +208,7 @@ At package initialization, `areion-pq` probes CPU capabilities (`cpu_amd64.go`, 
 | **`SLHDSATEMSign256f`** | 1.6 (627,325,663 ns) | 69.0 (14,486,474 ns) | 69.2 (14,460,677 ns) | 69.5 (14,381,663 ns) | 69.4 (14,416,018 ns) |
 | **`SLHDSATEMVerify256f`** | 54.2 (18,459,121 ns) | 2,409.3 (415,051 ns) | 2,417.4 (413,661 ns) | 2,425.6 (412,265 ns) | 2,438.2 (410,136 ns) |
 
-On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`238.7 us` (`4,190 ops/s`)** and `SLHDSAVerify256f` in **`297.0 us` (`3,367 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`1.66 ms` / `1.63 ms`**, `FAESTSign256f` / `FAESTVerify256f` in **`3.90 ms` / `3.92 ms`**, `KDFExpand` reaches **`2,144.2 MB/s`** (`1.68 c/B`), and `TEM2SIVEncrypt` reaches **`1,191.3 MB/s`** (`3.02 c/B`) on `avx512`.
+On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`238.7 us` (`4,190 ops/s`)** and `SLHDSAVerify256f` in **`297.0 us` (`3,367 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`1.66 ms` / `1.63 ms`**, `FAESTSign256f` / `FAESTVerify256f` in **`4.28 ms` / `4.32 ms`**, `KDFExpand` reaches **`2,144.2 MB/s`** (`1.68 c/B`), and `TEM2SIVEncrypt` reaches **`1,191.3 MB/s`** (`3.02 c/B`) on `avx512`.
 
 ### 2. AWS Graviton 4 (`c8g.4xlarge`, Neoverse-V2, 16 vCPUs, ARM64)
 
@@ -233,10 +234,10 @@ On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`238.7 us` (`4,1
 | :--- | :---: | :---: |
 | **`FAESTSign128f`** | 24.0 (41,683,072 ns) | 493.2 (2,027,646 ns) |
 | **`FAESTVerify128f`** | 24.4 (41,031,230 ns) | 509.3 (1,963,563 ns) |
-| **`FAESTSign256f`** | 9.6 (104,048,706 ns) | 213.4 (4,686,679 ns) |
-| **`FAESTVerify256f`** | 9.8 (101,769,196 ns) | 217.3 (4,601,875 ns) |
-| **`FAESTEM2Sign256f`** | 6.1 (163,542,514 ns) | 135.9 (7,357,253 ns) |
-| **`FAESTEM2Verify256f`** | 6.2 (160,030,027 ns) | 143.6 (6,964,631 ns) |
+| **`FAESTSign256f`** | 8.9 (111,893,323 ns) | 188.6 (5,301,243 ns) |
+| **`FAESTVerify256f`** | 9.1 (109,495,863 ns) | 192.5 (5,193,473 ns) |
+| **`FAESTEM2Sign256f`** | 5.6 (177,358,430 ns) | 118.3 (8,452,920 ns) |
+| **`FAESTEM2Verify256f`** | 5.7 (173,924,534 ns) | 125.2 (7,990,303 ns) |
 | **`SLHDSASign128f`** | 5.3 (188,969,254 ns) | 149.9 (6,669,770 ns) |
 | **`SLHDSAVerify128f`** | 85.3 (11,723,685 ns) | 2,476.4 (403,818 ns) |
 | **`SLHDSASign256f`** | 3.1 (326,832,660 ns) | 98.6 (10,139,575 ns) |
@@ -244,7 +245,7 @@ On Intel® Core™ i7-11700K, `SLHDSAVerify128f` completes in **`238.7 us` (`4,1
 | **`SLHDSATEMSign256f`** | 1.5 (673,939,006 ns) | 38.1 (26,260,059 ns) |
 | **`SLHDSATEMVerify256f`** | 51.0 (19,619,951 ns) | 1,336.3 (748,317 ns) |
 
-On AWS Graviton 4 (`arm64`), `SLHDSAVerify128f` completes in **`403.8 us` (`2,476 ops/s`)** and `SLHDSAVerify256f` in **`469.3 us` (`2,131 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`2.03 ms` / `1.96 ms`** and `FAESTSign256f` / `FAESTVerify256f` in **`4.69 ms` / `4.60 ms`**.
+On AWS Graviton 4 (`arm64`), `SLHDSAVerify128f` completes in **`403.8 us` (`2,476 ops/s`)** and `SLHDSAVerify256f` in **`469.3 us` (`2,131 ops/s`)**, while `FAESTSign128f` / `FAESTVerify128f` run in **`2.03 ms` / `1.96 ms`** and `FAESTSign256f` / `FAESTVerify256f` in **`5.30 ms` / `5.19 ms`**.
 
 ### 3. Comparison with Official `NIST FIPS 205` (`SLH-DSA-SHA2 / SHAKE`) & Official `FAEST` (`v3.0.3`) (ms/op)
 
@@ -276,15 +277,15 @@ On AWS Graviton 4 (`arm64`), `SLHDSAVerify128f` completes in **`403.8 us` (`2,47
 | **`areion_pq_faest_{sign,verify}128f` (`areion-pq-c` C)** | **304 / 7,456** | **1.23 / 1.15** | **2.11 / 1.95** | **10r `Areion-256` OWF + `Areion` PRG** |
 | `faest_128f` (`faest-ref v3.0.3` C) | 120 / 5,170 | 1.16 / 0.83 | 11.88 / 6.49 | 10r `AES-128` OWF + `SHAKE` tree PRG |
 | `faest_em_128f` (`faest-ref v3.0.3` C) | 80 / 4,170 | 1.13 / 0.72 | 9.17 / 4.46 | 10r `AES-128-EM` OWF + `SHAKE` tree PRG |
-| **`FAESTSign256f / FAESTVerify256f` (`areion-pq` Go)** | **320 / 20,512** | **3.90 / 3.92** | **4.69 / 4.60** | **10r `Areion-256` OWF + `Areion` PRG** |
-| **`areion_pq_faest_{sign,verify}256f` (`areion-pq-c` C)** | **320 / 20,512** | **2.78 / 2.91** | **4.79 / 4.44** | **10r `Areion-256` OWF + `Areion` PRG** |
-| **`FAESTEM2Sign256f / FAESTEM2Verify256f` (`areion-pq` Go)** | **608 / 30,368** | **5.84 / 5.44** | **7.36 / 6.96** | **20r `Areion-EM2-256` (`2^170.7` BBB)** |
+| **`FAESTSign256f / FAESTVerify256f` (`areion-pq` Go)** | **320 / 20,512** | **4.28 / 4.32** | **5.30 / 5.19** | **10r `Areion-256` OWF + `Areion` PRG** |
+| **`areion_pq_faest_{sign,verify}256f` (`areion-pq-c` C)** | **320 / 20,512** | **3.42 / 3.13** | **5.36 / 5.00** | **10r `Areion-256` OWF + `Areion` PRG** |
+| **`FAESTEM2Sign256f / FAESTEM2Verify256f` (`areion-pq` Go)** | **608 / 30,368** | **7.22 / 6.37** | **8.45 / 7.99** | **20r `Areion-EM2-256` (`2^170.7` BBB)** |
 | `faest_256f` (`faest-ref v3.0.3` C) | 276 / 20,856 | 4.91 / 3.88 | 53.01 / 31.82 | 2×14r `AES-256` OWF + `SHAKE` tree PRG |
 | `faest_em_256f` (`faest-ref v3.0.3` C) | 224 / 18,084 | 3.90 / 3.14 | 40.52 / 21.16 | 14r `Rijndael-256-EM` + `SHAKE` tree PRG |
 | `faest_128s / faest_em_128s` (`faest-ref v3.0.3` C) | 120 / 4,066 · 80 / 3,466 | 8.40 / 5.61 · 5.89 / 4.78 | 32.57 / 22.04 · 16.44 / 9.61 | Small-sig (`128s`) `FAEST` baseline |
 | `faest_256s / faest_em_256s` (`faest-ref v3.0.3` C) | 276 / 16,626 · 224 / 14,554 | 33.18 / 27.91 · 23.53 / 21.96 | 160.16 / 135.65 · 70.29 / 49.32 | Small-sig (`256s`) `FAEST` baseline |
 
-Because `FAEST-Areion` accelerates both the 256-bit OWF (`Areion-256`) and the GGM tree / VOLE expansion (`Areion-512` / `SoEM512x4`) on hardware AES pipelines rather than `SHAKE256`, `FAESTSign256f` in `areion-pq` (`4.69 ms` Sign / `4.60 ms` Verify) is **`8.6×–11.3×` faster at signing and `4.6×–6.9×` faster at verification** on AWS Graviton 4 (`arm64`) than official `faest_em_256f` (`40.52 ms` / `21.16 ms`) and `faest_256f` (`53.01 ms` / `31.82 ms`), while `FAESTSign128f` (`2.03 ms` / `1.96 ms`) is **`4.5×–5.9×` faster at signing and `2.3×–3.3×` faster at verification** on AWS Graviton 4.
+Because `FAEST-Areion` accelerates both the 256-bit OWF (`Areion-256`) and the GGM tree / VOLE expansion (`Areion-512` / `SoEM512x4`) on hardware AES pipelines rather than `SHAKE256`, `FAESTSign256f` in `areion-pq` (`5.30 ms` Sign / `5.19 ms` Verify) is **`7.6×–10.0×` faster at signing and `4.1×–6.1×` faster at verification** on AWS Graviton 4 (`arm64`) than official `faest_em_256f` (`40.52 ms` / `21.16 ms`) and `faest_256f` (`53.01 ms` / `31.82 ms`), while `FAESTSign128f` (`2.03 ms` / `1.96 ms`) is **`4.5×–5.9×` faster at signing and `2.3×–3.3×` faster at verification** on AWS Graviton 4.
 
 ---
 
@@ -293,7 +294,7 @@ Because `FAEST-Areion` accelerates both the 256-bit OWF (`Areion-256`) and the G
 [`analysis/README.md`](analysis/README.md) contains 9 reproducible symbolic, algebraic, and empirical verification tools (`rank`, `sbox_qs`, `ortho`, `tweak`, `bounds`, `witness`, `slh`, `vole`, `integral`) validating every structural claim in this package:
 
 - **`rank` (`py/round9_witness_rank.py`)**: Symbolic `GF(2)` Gaussian elimination proving full Jacobian rank `d(Y)/d(w) = 2304 / 2304` and `d(X,Y)/d(K1,w) = 2560 / 2560` for 10-round `Areion-256` (`32` free S-boxes in Round 9), `4608 / 4608` for 20-round `Areion-EM2-256` (`64` free S-boxes), and `5376 / 5376` for 15-round `Areion-512` (`48` free S-boxes + `128` linear check bits).
-- **`sbox_qs` (`py/quicksilver_sbox_soundness.py`)**: Exhaustive check over all `256 × 256 = 65,536` byte pairs `(X, S)` in `GF(2^8)` proving `100%` completeness (`256 / 256`) and `100%` soundness (`65,280 / 65,280` invalid pairs rejected) of the coupled degree-2 `QuickSilver` equations.
+- **`sbox_qs` (`py/quicksilver_sbox_soundness.py`)**: Exhaustive check over all `256 × 256 = 65,536` byte pairs `(X, S)` in `GF(2^8)` proving `100%` completeness (`256 / 256`) and `100%` soundness (`65,280 / 65,280` invalid pairs rejected) of the coupled degree-2 `QuickSilver` equations, plus `GF(2^128)` and `GF(2^256)` homomorphic VOLE evaluation (`B_V == A0 ⊕ A1 * Delta`).
 - **`ortho` (`py/orthomorphism_bijectivity.py`)**: `GF(2)^256` determinant and rank verification (`rank(L) = 256 / 256`, `rank(I ⊕ L) = 256 / 256`) for `OrthoSigma256` and clamped `MulOrtho256`.
 - **`tweak` (`py/slh_tweak_separation.py`) & `slh` (`go/slh_collision.go`)**: Quotient-space rank proof and `10,000`-trial empirical demonstration of `100%` tweak cancellation in naive feed-forward `TEM` vs `0 / 10,000` collisions and full `256 / 256` tweak capacity rank in `SLHF256`, `SLHF128`, `SLHH128`, and `SLHFTEM256`.
 - **`witness` (`go/witness_check.go`), `vole` (`go/vole_check.go`), & `integral` (`c/pq_integral.c`)**: `100,000` random witness extractions, `46,080` exhaustive single-bit witness corruptions (`100%` rejected), `1,000,000` hardware `PCLMULQDQ` `QuickSilver` gate checks, and Order-1 / Order-2 `AES-NI` `Lambda`-set integral dissolution tests.
