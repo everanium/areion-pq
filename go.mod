@@ -3,7 +3,7 @@ module github.com/everanium/areion-pq
 go 1.27.1
 
 require (
-	github.com/everanium/areion v0.2.1
+	github.com/everanium/areion v0.2.2
 	golang.org/x/sys v0.49.0
 )
 

@@ -475,6 +475,22 @@ func main() {
 
 ---
 
+## Release Verification
+
+Release tags, commits, and `SHA256SUMS` manifests (`SHA256SUMS.sig`) are signed with the project Ed25519 signing key:
+
+- **Public key:** `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFNXVn74pDakH4cj6+Qk5uDVFASGfPL4XdDihoeOlp/F andrew@encloud.blue`
+- **Fingerprint:** `SHA256:Fo2/bsjgnGr4KtJZgr83Q4NE/ZGeY7dTOx7vzukqvAo`
+
+```sh
+printf 'andrew@encloud.blue ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFNXVn74pDakH4cj6+Qk5uDVFASGfPL4XdDihoeOlp/F\n' > /tmp/areion-pq-allowed-signers
+git -c gpg.ssh.allowedSignersFile=/tmp/areion-pq-allowed-signers verify-tag <tag>
+ssh-keygen -Y verify -f /tmp/areion-pq-allowed-signers -I andrew@encloud.blue -n file -s SHA256SUMS.sig < SHA256SUMS
+sha256sum --check SHA256SUMS
+```
+
+---
+
 ## License
 
 Dual-licensed under either:

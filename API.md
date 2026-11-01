@@ -41,10 +41,10 @@ Built on **[`everanium/areion`](https://github.com/everanium/areion)**; companio
 
 | Constant | Value | Description |
 | :--- | :---: | :--- |
-| `Version` | `"0.2.1"` | Semantic version string of `areion-pq` |
+| `Version` | `"0.2.2"` | Semantic version string of `areion-pq` |
 | `VersionMajor` | `0` | Major version number |
 | `VersionMinor` | `2` | Minor version number |
-| `VersionPatch` | `1` | Patch version number |
+| `VersionPatch` | `2` | Patch version number |
 | `BlockSize` | `16` | 128-bit AES / `GF(2^128)` block size in bytes |
 | `State256Size` | `32` | 256-bit `Areion-256` permutation state size in bytes |
 | `State512Size` | `64` | 512-bit `Areion-512` permutation state size in bytes |
